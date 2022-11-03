@@ -45,17 +45,28 @@ int main(int c, char **v)
     if (newsockfd  < 0)
         error_lol("LMAO3");
 
-    while (1){
-        bzero(buffer, 1000);
-        if (read(newsockfd, buffer, 1000) < 0)
-            error_lol("LMAO4");
-        std::cout << "client : " << buffer;
-        bzero(buffer, 1000);
-        fgets(buffer, 1000, stdin);
-        write(newsockfd, buffer, strlen(buffer));
-        if (!strncmp("Bye", buffer, 3))
-            break;
+    // while (1){
+    //     bzero(buffer, 1000);
+    //     if (read(newsockfd, buffer, 1000) < 0)
+    //         error_lol("LMAO4");
+    //     std::cout << "client : " << buffer;
+    //     bzero(buffer, 1000);
+    //     fgets(buffer, 1000, stdin);
+    //     write(newsockfd, buffer, strlen(buffer));
+    //     if (!strncmp("Bye", buffer, 3))
+    //         break;
+    // }
+    FILE *fp;
+    int i = 0;
+    fp = fopen("lol_received.txt", "a");
+    int words;
+    read(newsockfd, &words, sizeof(int));
+    while(i != words){
+        read(newsockfd, buffer, 1000);
+        fprintf(fp, "%s ", buffer);
+        i++;
     }
+    printf("file received !");
     close(newsockfd);
     close(sockfd);
     return 0;

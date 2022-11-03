@@ -6,7 +6,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <iostream> 
+#include <iostream>
+#include <fcntl.h>
 
 void error_lol(std::string msg)
 {
@@ -39,17 +40,36 @@ int main(int c, char **v)
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)))
         error_lol("lol");
     
-    while (1){
-        bzero(buffer, 1000);
-        fgets(buffer, 1000, stdin);
-        write(sockfd, buffer, strlen(buffer));
-        bzero(buffer, 1000);
-        if (read(sockfd, buffer, 1000) < 0)
-            error_lol("lol");
-        std::cout << "server : " << buffer;
-        if (!strncmp(buffer, "Bye", 3))
-            break;
+    // while (1){
+    //     bzero(buffer, 1000);
+    //     fgets(buffer, 1000, stdin);
+    //     write(sockfd, buffer, strlen(buffer));
+    //     bzero(buffer, 1000);
+    //     if (read(sockfd, buffer, 1000) < 0)
+    //         error_lol("lol");
+    //     std::cout << "server : " << buffer;
+    //     if (!strncmp(buffer, "Bye", 3))
+    //         break;
+    // }
+    FILE *f;
+    char cc;
+    int words = 0;
+    f = fopen("lol.txt", "r");
+    while ((cc = getc(f)) != EOF){
+        fscanf(f, "%s", buffer);
+        if (isspace(cc) || cc=='\t')
+            words++;
     }
+    write(sockfd, &words, sizeof(int));
+    rewind(f);
+
+    char ch;
+    while (ch != EOF){
+        fscanf(f, "%s", buffer);
+        write(sockfd, buffer, 1000);
+        ch = fgetc(f);
+    }
+    std::cout << "file sent !" << std::endl;
     close(sockfd);
     return 0;
 }

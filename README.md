@@ -1,4 +1,4 @@
-# 42cursus-webserv
-HTTP server in C++
+# 42cursus-ft-irc
+Internet Relay Chat (IRC) Server in C++
 
 Hello mfks!!

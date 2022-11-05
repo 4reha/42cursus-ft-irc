@@ -7,6 +7,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <iostream> 
+#include <poll.h>
+#include <arpa/inet.h>
 
 void error_lol(std::string msg)
 {
@@ -35,6 +37,7 @@ int main(int c, char **v)
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portnbr);
+    std::cout << ntohs(serv_addr.sin_port) << std::endl;
 
     if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         error_lol("LMAO2");
@@ -42,22 +45,38 @@ int main(int c, char **v)
     listen(sockfd, 5);
     clilen = sizeof(cli_addr);
     int i = 0;
+    struct pollfd mypoll;
+    bzero(&mypoll, sizeof(mypoll));
+    mypoll.fd = sockfd;
+    mypoll.events = POLLIN;
+    struct pollfd mypollfd[2];
+    bzero(&mypollfd, sizeof(mypollfd));
     while (1){
-        newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-        sockfds[i++] = newsockfd;
-        if (newsockfd  < 0)
-            error_lol("LMAO3");
+        if (poll(&mypoll, 1, 0))
+        {
+            newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+            sockfds[i++] = newsockfd;
+            if (newsockfd  < 0)
+                error_lol("LMAO3");
+            std::cout << "CLIENT: " << inet_ntoa(cli_addr.sin_addr) << "---" << ntohs(cli_addr.sin_port) << std::endl;
+            mypollfd[0].fd = sockfds[0];
+            mypollfd[1].fd = sockfds[1];
+            mypollfd[0].events = POLLIN;
+            mypollfd[1].events = POLLIN;
+        }
         bzero(buffer, 1000);
-        if (read(sockfds[0], buffer, 1000) <= 0)
-            error_lol("LMAO4");
-        std::cout << sockfds[0] << ", " << sockfds[1] << std::endl;
-        if (sockfds[1] && read(sockfds[1], buffer, 1000) <= 0)
-            error_lol("LMAO4");
-        std::cout << "client : " << buffer;
+        if (poll(mypollfd, 2, 0))
+        {
+            if (read(sockfds[0], buffer, 1000) < 0)
+                error_lol("LMAO4");
+            if (sockfds[1] && read(sockfds[1], buffer, 1000) < 0)
+                error_lol("LMAO4");
+            std::cout << "client : " << buffer;
+        }
         bzero(buffer, 1000);
-        write(newsockfd, "hello", 6);
-        if (!strncmp("Bye", buffer, 3))
-            break;
+        // write(newsockfd, "hello", 6);
+        // if (!strncmp("Bye", buffer, 3))
+        //     break;
     }
     close(newsockfd);
     close(sockfd);

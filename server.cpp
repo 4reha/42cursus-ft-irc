@@ -16,6 +16,7 @@ void error_lol(std::string msg)
 
 int main(int c, char **v)
 {
+    int sockfds[2] = {0};
     if (c != 2)
         error_lol("lmao");
     char buffer[1000];
@@ -40,33 +41,24 @@ int main(int c, char **v)
 
     listen(sockfd, 5);
     clilen = sizeof(cli_addr);
-
-    newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-    if (newsockfd  < 0)
-        error_lol("LMAO3");
-
-    // while (1){
-    //     bzero(buffer, 1000);
-    //     if (read(newsockfd, buffer, 1000) < 0)
-    //         error_lol("LMAO4");
-    //     std::cout << "client : " << buffer;
-    //     bzero(buffer, 1000);
-    //     fgets(buffer, 1000, stdin);
-    //     write(newsockfd, buffer, strlen(buffer));
-    //     if (!strncmp("Bye", buffer, 3))
-    //         break;
-    // }
-    FILE *fp;
     int i = 0;
-    fp = fopen("lol_received.txt", "a");
-    int words;
-    read(newsockfd, &words, sizeof(int));
-    while(i != words){
-        read(newsockfd, buffer, 1000);
-        fprintf(fp, "%s ", buffer);
-        i++;
+    while (1){
+        newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+        sockfds[i++] = newsockfd;
+        if (newsockfd  < 0)
+            error_lol("LMAO3");
+        bzero(buffer, 1000);
+        if (read(sockfds[0], buffer, 1000) <= 0)
+            error_lol("LMAO4");
+        std::cout << sockfds[0] << ", " << sockfds[1] << std::endl;
+        if (sockfds[1] && read(sockfds[1], buffer, 1000) <= 0)
+            error_lol("LMAO4");
+        std::cout << "client : " << buffer;
+        bzero(buffer, 1000);
+        write(newsockfd, "hello", 6);
+        if (!strncmp("Bye", buffer, 3))
+            break;
     }
-    printf("file received !");
     close(newsockfd);
     close(sockfd);
     return 0;

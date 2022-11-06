@@ -1,4 +1,6 @@
-#include "server.hpp"
+#include "Server.hpp"
+#include "Clients.hpp"
+
 
 void error_lol(std::string msg)
 {
@@ -23,6 +25,7 @@ int main(int ac, char** av)
 		error_lol("Error: Port: Not A Number!");
 
 	Server servObj(&av[1]);
-	// servObj.init_Server();
-	perror("hello");
+	servObj.init_Server();
+	servObj.start_connection();
+	return (EXIT_SUCCESS);
 }

@@ -16,12 +16,13 @@
 #include <vector>
 #include "Clients.hpp"
 
-std::string read_sock(int newsockfd);
+int read_sock(int newsockfd, std::string &cmd);
+
 class Server
 {
 private:
 	std::string password;
-	struct sockaddr_in serv_addr, cli_addr;
+	struct sockaddr_in serv_addr;
 	int port, sockfd;
 	std::vector<Clients> users_DB;
 
@@ -79,6 +80,7 @@ void Server::start_connection()
 	poll_sockfd.events = POLLIN;
 	while (1)
 	{
+		// sleep(2);
 		if (poll(&poll_sockfd, 1, 0))
 		{
 			if ((newsockfd = accept(this->sockfd, (struct sockaddr *)&cli_addr, &clilen)) == -1)
@@ -86,35 +88,44 @@ void Server::start_connection()
 				perror("Error: Accepting failure");
 				exit(EXIT_FAILURE);
 			}
+			std::cout << "2..." << std::endl;
+			// user = new Clients();
 			user.Setup_clients(cli_addr, newsockfd);
-			users_DB.push_back(user);
+			std::cout << "1..." << std::endl;
+			users_DB.push_back(Clients(user));
+			// users_DB.push_back(user);
+			std::cout << "3..." << std::endl;
 		}
 		for (std::vector<Clients>::reverse_iterator rev_it = users_DB.rbegin(); rev_it != users_DB.rend(); rev_it++)
 		{
-			if (poll(&(rev_it->sock_pollin), 1, 0))
+			if (poll(&(rev_it->sock_pollin), 1, 0) > 0)
 			{
-				cmd = read_sock(newsockfd);
-				std::cout << "cmd:||||||\n" << cmd << "||||||" << std::endl;
-				std::vector<std::string> out;
-				for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), " "); token != NULL; token = std::strtok(nullptr, " "))
-				{
-					out.push_back(token);
+				// std::cout << 
+				if (!read_sock(rev_it->sockfd, cmd))	{
+					close(rev_it->sockfd);
+					users_DB.erase(rev_it.base() - 1);
 				}
-				if (out[0] == "PASS")	{
-					if (out[1].substr(0, out[1].size() - 2) == this->password)
-					{
-						std::cout << "New Client from: " << user.ip_addr << ":" << user.port << ", Welcome!" << std::endl;
-						rev_it->Registered = true;
-					}
-					else
-					{
-						std::cout << "Connection refused from: " << user.ip_addr << ":" << user.port << ", Password incorect!" << std::endl;
-						users_DB.pop_back();
-					}
+				else	{
+					std::cout << "cmd: "<< cmd ;
+					// std::vector<std::string> out;
+					// for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), " "); token != NULL; token = std::strtok(nullptr, " "))
+					// {
+					// 	out.push_back(token);
+					// }
+					// if (out[0] == "PASS")	{
+					// 	if (out[1].substr(0, out[1].size() - 2) == this->password)
+					// 	{
+					// 		std::cout << "New Client from: " << user.ip_addr << ":" << user.port << ", Welcome!" << std::endl;
+					// 		rev_it->Registered = true;
+					// 	}
+					// 	else
+					// 	{
+					// 		std::cout << "Connection refused from: " << user.ip_addr << ":" << user.port << ", Password incorect!" << std::endl;
+					// 		users_DB.pop_back();
+					// 	}
+					// }
 				}
-				// else if (out[0] == "NICK"){
-
-				// }
+				cmd = "";
 			}
 		}
 	}

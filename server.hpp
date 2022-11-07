@@ -20,18 +20,19 @@ int read_sock(int newsockfd, std::string &cmd);
 
 class Server
 {
-private:
-	std::string password;
-	struct sockaddr_in serv_addr;
-	int port, sockfd;
-	std::vector<Clients*> users_DB;
+	private:
+		std::string password;
+		struct sockaddr_in serv_addr;
+		int port, sockfd;
+		std::vector<Clients*> users_DB;
+		std::vector<pollfd> poll_socket;
 
-public:
-	Server(char **args);
-	~Server();
-	void init_Server();
-	void start_connection();
-	Clients *new_client(sockaddr_in cli_addr, int newsockfd);
+	public:
+		Server(char **args);
+		~Server();
+		void init_Server();
+		void start_connection();
+		Clients *new_client(sockaddr_in cli_addr, int newsockfd);
 };
 
 Clients *Server::new_client(sockaddr_in cli_addr, int newsockfd){
@@ -84,52 +85,83 @@ void Server::start_connection()
 	struct pollfd poll_sockfd;
 	poll_sockfd.fd = this->sockfd;
 	poll_sockfd.events = POLLIN;
+	this->poll_socket.push_back(poll_sockfd);
 	while (1)
 	{
-		// sleep(2);
-		if (poll(&poll_sockfd, 1, 0))
-		{
-			if ((newsockfd = accept(this->sockfd, (struct sockaddr *)&cli_addr, &clilen)) == -1)
-			{
-				perror("Error: Accepting failure");
-				exit(EXIT_FAILURE);
-			}
-			// user.Setup_clients(cli_addr, newsockfd);
-			this->users_DB.push_back(this->new_client(cli_addr, newsockfd));
-			std::cout << users_DB[0]->sock_pollin.fd << std::endl;
-			// this->users_DB.push_back(user);
-		}
-		for (int k = users_DB.size() - 1; k >= 0; k--)
-		{
-			if (poll(&(users_DB[k]->sock_pollin), 1, 0) > 0)
-			{
-				if (!read_sock(users_DB[k]->sockfd, cmd))	{
-					close(users_DB[k]->sockfd);
-					delete users_DB[k];
-					users_DB.erase(users_DB.begin() + k);
+		for (size_t p = 0; p < this->poll_socket.size(); p++)	{
+			int t;
+			if ((t = poll(&(this->poll_socket[p]), 1, 0)))	{
+				if (t == -1)	{
+					perror("Error: poll failed");
+					exit(1);
 				}
-				else	{
-					std::cout << "cmd: "<< cmd ;
-					// std::vector<std::string> out;
-					// for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), " "); token != NULL; token = std::strtok(nullptr, " "))
-					// {
-					// 	out.push_back(token);
-					// }
-					// if (out[0] == "PASS")	{
-					// 	if (out[1].substr(0, out[1].size() - 2) == this->password)
-					// 	{
-					// 		std::cout << "New Client from: " << user.ip_addr << ":" << user.port << ", Welcome!" << std::endl;
-					// 		rev_it->Registered = true;
-					// 	}
-					// 	else
-					// 	{
-					// 		std::cout << "Connection refused from: " << user.ip_addr << ":" << user.port << ", Password incorect!" << std::endl;
-					// 		users_DB.pop_back();
-					// 	}
-					// }
+				if (!p)	{
+					if ((newsockfd = accept(this->sockfd, (struct sockaddr *)&cli_addr, &clilen)) == -1)
+					{
+						perror("Error: Accepting failure");
+						exit(EXIT_FAILURE);
+					}
+					this->users_DB.push_back(this->new_client(cli_addr, newsockfd));
+					this->poll_socket.push_back(this->users_DB.front()->sock_pollin); // unpair
+					this->poll_socket.push_back(this->users_DB.front()->sock_pollout); // pair
 				}
-				cmd = "";
+				else if (p % 2)	{ // if unpair
+					int rp = (p - 1) / 2; 
+					if (!read_sock(users_DB[rp]->sockfd, cmd))	{
+						close(users_DB[rp]->sockfd);
+						delete users_DB[rp];
+						users_DB.erase(users_DB.begin() + rp);
+						this->poll_socket.erase(poll_socket.begin() + p);
+						std::cout << "deleted! " << std::endl;
+						this->poll_socket.erase(poll_socket.begin() + p);
+					}
+					else{
+						std::cout << "cmd: "<< cmd ;
+						cmd = "";
+					}
+				}
 			}
 		}
+		// if (poll(&poll_sockfd, 1, 0))
+		// {
+		// 	if ((newsockfd = accept(this->sockfd, (struct sockaddr *)&cli_addr, &clilen)) == -1)
+		// 	{
+		// 		perror("Error: Accepting failure");
+		// 		exit(EXIT_FAILURE);
+		// 	}
+		// 	this->users_DB.push_back(this->new_client(cli_addr, newsockfd));
+		// }
+		// for (int k = users_DB.size() - 1; k >= 0; k--)
+		// {
+		// 	if (poll(&(users_DB[k]->sock_pollin), 1, 0) > 0)
+		// 	{
+		// 		if (!read_sock(users_DB[k]->sockfd, cmd))	{
+		// 			close(users_DB[k]->sockfd);
+		// 			delete users_DB[k];
+		// 			users_DB.erase(users_DB.begin() + k);
+		// 		}
+				// else	{
+				// 	std::cout << "cmd: "<< cmd ;
+		// 			// std::vector<std::string> out;
+		// 			// for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), " "); token != NULL; token = std::strtok(nullptr, " "))
+		// 			// {
+		// 			// 	out.push_back(token);
+		// 			// }
+		// 			// if (out[0] == "PASS")	{
+		// 			// 	if (out[1].substr(0, out[1].size() - 2) == this->password)
+		// 			// 	{
+		// 			// 		std::cout << "New Client from: " << user.ip_addr << ":" << user.port << ", Welcome!" << std::endl;
+		// 			// 		rev_it->Registered = true;
+		// 			// 	}
+		// 			// 	else
+		// 			// 	{
+		// 			// 		std::cout << "Connection refused from: " << user.ip_addr << ":" << user.port << ", Password incorect!" << std::endl;
+		// 			// 		users_DB.pop_back();
+		// 			// 	}
+		// 			// }
+		// 		}
+		// 		cmd = "";
+		// 	}
+		// }
 	}
 }

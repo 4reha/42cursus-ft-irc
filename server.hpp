@@ -24,14 +24,19 @@ private:
 	std::string password;
 	struct sockaddr_in serv_addr;
 	int port, sockfd;
-	std::vector<Clients> users_DB;
+	std::vector<Clients*> users_DB;
 
 public:
 	Server(char **args);
 	~Server();
 	void init_Server();
 	void start_connection();
+	Clients *new_client(sockaddr_in cli_addr, int newsockfd);
 };
+
+Clients *Server::new_client(sockaddr_in cli_addr, int newsockfd){
+	return (new Clients(cli_addr, newsockfd));
+}
 
 Server::Server(char **args)
 {
@@ -67,12 +72,13 @@ void Server::init_Server()
 	}
 }
 
+
+
 void Server::start_connection()
 {
 	struct sockaddr_in cli_addr;
 	socklen_t clilen = sizeof(cli_addr);
 	int newsockfd;
-	Clients user;
 	std::string cmd;
 
 	struct pollfd poll_sockfd;
@@ -88,22 +94,19 @@ void Server::start_connection()
 				perror("Error: Accepting failure");
 				exit(EXIT_FAILURE);
 			}
-			std::cout << "2..." << std::endl;
-			// user = new Clients();
-			user.Setup_clients(cli_addr, newsockfd);
-			std::cout << "1..." << std::endl;
-			users_DB.push_back(Clients(user));
-			// users_DB.push_back(user);
-			std::cout << "3..." << std::endl;
+			// user.Setup_clients(cli_addr, newsockfd);
+			this->users_DB.push_back(this->new_client(cli_addr, newsockfd));
+			std::cout << users_DB[0]->sock_pollin.fd << std::endl;
+			// this->users_DB.push_back(user);
 		}
-		for (std::vector<Clients>::reverse_iterator rev_it = users_DB.rbegin(); rev_it != users_DB.rend(); rev_it++)
+		for (int k = users_DB.size() - 1; k >= 0; k--)
 		{
-			if (poll(&(rev_it->sock_pollin), 1, 0) > 0)
+			if (poll(&(users_DB[k]->sock_pollin), 1, 0) > 0)
 			{
-				// std::cout << 
-				if (!read_sock(rev_it->sockfd, cmd))	{
-					close(rev_it->sockfd);
-					users_DB.erase(rev_it.base() - 1);
+				if (!read_sock(users_DB[k]->sockfd, cmd))	{
+					close(users_DB[k]->sockfd);
+					delete users_DB[k];
+					users_DB.erase(users_DB.begin() + k);
 				}
 				else	{
 					std::cout << "cmd: "<< cmd ;

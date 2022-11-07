@@ -65,6 +65,7 @@ int main(int c, char **v)
             mypollfd[1].events = POLLIN;
         }
         bzero(buffer, 1000);
+        // sleep(2);
         if (poll(mypollfd, 2, 0))
         {
             if (read(sockfds[0], buffer, 1000) < 0)

@@ -29,6 +29,7 @@ public:
 
 
 	Clients();
+	Clients(Clients const & cpy);
 	~Clients();
 	void Setup_clients(sockaddr_in cli_addr, int newsockfd);
 };
@@ -40,8 +41,21 @@ Clients::Clients()
 	this->Registered = false;
 }
 
+Clients::Clients(Clients const & cpy)
+{
+	this->ip_addr = cpy.ip_addr;
+    this->port = cpy.port;
+    this->sockfd = cpy.sockfd;
+    this->nickname = cpy.nickname;
+    this->username = cpy.username;
+    this->sock_pollin = cpy.sock_pollin;
+    this->sock_pollout = cpy.sock_pollout;
+    this->Registered = false;
+}
+
 Clients::~Clients()
 {
+	std::cout << "bye" << std::endl;
 	close(this->sockfd);
 }
 

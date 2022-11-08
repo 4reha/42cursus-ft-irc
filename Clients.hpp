@@ -26,6 +26,9 @@ public:
 	std::vector<std::string> pending_msgs;
 
 	bool	Registered;
+	bool	Authenticated;
+	bool	nicked;
+	bool	named;
 
 
 
@@ -70,6 +73,6 @@ Clients::Clients(Clients const & cpy)
 
 Clients::~Clients()
 {
-	std::cout << "bye" << std::endl;
+	std::cout << "user " << this->nickname << " has disconnected!" << std::endl;
 	close(this->sockfd);
 }

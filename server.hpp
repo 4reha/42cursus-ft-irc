@@ -36,6 +36,8 @@ class Server
 		void	 	register_newClient(int ui);
 		void	 	deny_newClient(int ui, int n);
 
+		void 		set_nickname(std::vector<std::string>& pass_cmd, int ui);
+		void 		set_username(std::vector<std::string>& pass_cmd, int ui);
 	public:
 		Server(char **args);
 		~Server();
@@ -44,13 +46,55 @@ class Server
 		Clients*	new_client(struct sockaddr_in cli_addr, int newsockfd);
 };
 
-void Server::register_newClient(int ui)	
+void Server::set_username(std::vector<std::string>& pass_cmd, int ui)
 {
-	std::cout << "New Client from: " << users_DB[ui]->ip_addr;
-	std::cout << ":" << users_DB[ui]->port << ", Welcome!" << std::endl;
-	this->users_DB[ui]->Registered = true;
-
+	if (pass_cmd.size() < 5)
+		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS <USER> :Not enough parameters\n");
+	else {
+		this->users_DB[ui]->username = pass_cmd[1];
+		this->users_DB[ui]->named = true;
+		if (this->users_DB[ui]->nicked && this->users_DB[ui]->named && !this->users_DB[ui]->Registered)	{
+			this->users_DB[ui]->Registered = true;
+			std::cout << "New Client has connected from " << this->users_DB[ui]->ip_addr;
+			std::cout << ":" << this->users_DB[ui]->port << " as: " << this->users_DB[ui]->nickname << std::endl;
+		}
+	}
 }
+
+void Server::set_nickname(std::vector<std::string>& pass_cmd, int ui)
+{
+	std::string nickName;
+	if (pass_cmd.size() < 2)	{
+		this->users_DB[ui]->pending_msgs.push_back("431 ERR_NONICKNAMEGIVEN :No nickname given\n");
+		return ;
+	}
+	if (pass_cmd.size() > 2)	{
+		nickName = std::string(pass_cmd[1], 1, pass_cmd[1].length() - 1);
+		for (size_t i = 2; i < pass_cmd.size(); i++)	{
+			nickName += " ";
+			nickName += pass_cmd[i];
+		}
+	}
+	else
+		nickName = pass_cmd[1];
+	for (size_t i = 0; i < this->users_DB.size(); i++)	{
+		if (nickName == this->users_DB[i]->nickname)	{
+			this->users_DB[ui]->pending_msgs.push_back("433 ERR_NICKNAMEINUSE <" + nickName + "> :Nickname is already in use\n");
+			return ;
+		}
+	}
+	this->users_DB[ui]->nickname = nickName;
+	this->users_DB[ui]->nicked = true;
+	if (this->users_DB[ui]->nicked && this->users_DB[ui]->named && !this->users_DB[ui]->Registered)	{
+
+		this->users_DB[ui]->Registered = true;
+	}
+}
+
+
+// void Server::register_newClient(int ui)	
+// {
+// }
 
 void Server::deny_newClient(int ui, int n)	
 {
@@ -79,16 +123,14 @@ void Server::authenticate_connection(std::vector<std::string>& pass_cmd, int ui)
 	}
 	else if (pass_cmd.size() == 2)
 		passcode = pass_cmd[1];
-	std::cout << "TEST:" << passcode  << ":"<< std::endl;
 	if (passcode == this->password)
-		this->register_newClient(ui);
+		this->users_DB[ui]->Authenticated = true;
 	else
 		this->deny_newClient(ui, pass_cmd.size());
 }
 
-void Server::cmd_manager(std::string cmd, int rp)	
+void Server::cmd_manager(std::string cmd, int rp)
 {
-
 	std::cout << cmd << std::endl;
 	std::vector<std::string> cmd_out;
 	for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), " "); token != NULL; token = std::strtok(nullptr, " "))
@@ -98,6 +140,14 @@ void Server::cmd_manager(std::string cmd, int rp)
 			this->users_DB[rp]->pending_msgs.push_back("462 ERR_ALREADYREGISTRED :You may not reregister\n");
 		else
 			this->authenticate_connection(cmd_out, rp);
+	}
+	if (this->users_DB[rp]->Authenticated && cmd_out[0] == "NICK")	{
+		this->set_nickname(cmd_out, rp);
+	}
+	if (this->users_DB[rp]->Authenticated && cmd_out[0] == "USER")	{
+		if (this->users_DB[rp]->Registered)
+			this->users_DB[rp]->pending_msgs.push_back("462 ERR_ALREADYREGISTRED :You may not reregister\n");
+		this->set_username(cmd_out, rp);
 	}
 	else if (this->users_DB[rp]->Registered)	{
 	}
@@ -118,7 +168,6 @@ void Server::name_later(int p_i)
 		this->poll_socket.erase(poll_socket.begin() + p_i);
 	}
 	else{
-		// std::cout << "cmd : "<< cmd ;
 		std::vector<std::string> args;
 		for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), "\r\n"); token != NULL; token = std::strtok(nullptr, "\r\n"))
 			this->cmd_manager(token, rp);

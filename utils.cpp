@@ -24,3 +24,10 @@ int read_sock(int newsockfd, std::string &cmd)
 	}
 	return (j);
 }
+
+bool	ft_isspeacial(int c)
+{
+	if (c == '-' || c == '[' || c == ']' || c == '\\' || c == '`' || c == '^' || c == '{' || c == '}')
+		return (true);
+	return (false);
+}

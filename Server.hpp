@@ -22,12 +22,13 @@ int read_sock(int newsockfd, std::string &cmd);
 class Server
 {
 private:
-	std::string password;
-	struct sockaddr_in serv_addr;
-	int port;
-	int sockfd;
-	std::vector<Client *> users_DB;
-	std::vector<struct pollfd> poll_socket;
+	int 							port;
+	int 							sockfd;
+	std::string 					password;
+	struct pollfd 					poll_sockfd;
+	struct sockaddr_in 				serv_addr;
+	std::vector<Client *> 			users_DB;
+	std::vector<struct pollfd> 		poll_socket;
 
 	void accept_connection();
 	void name_later(int p_i);
@@ -185,7 +186,7 @@ void Server::authenticate_connection(std::vector<std::string> &pass_cmd, int ui)
 
 void Server::cmd_manager(std::string cmd, int rp)
 {
-	// std::cout << cmd << std::endl;
+	std::cout << cmd << std::endl;
 	std::string cpy = cmd;
 	std::vector<std::string> cmd_out;
 	for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), " "); token != NULL; token = std::strtok(nullptr, " "))
@@ -232,8 +233,6 @@ void Server::name_later(int p_i)
 		this->users_DB.erase(users_DB.begin() + rp);
 		this->poll_socket.erase(poll_socket.begin() + p_i);
 		this->poll_socket.erase(poll_socket.begin() + p_i);
-		for (size_t i = 0; i < this->users_DB.size(); i++)
-			std::cout << "db: " << this->users_DB[i]->nickname << std::endl;
 	}
 	else
 	{
@@ -281,25 +280,14 @@ Server::~Server()
 
 void Server::init_Server()
 {
-	struct pollfd poll_sockfd;
-
 	if ((this->sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-	{
-		perror("Error: Socket failure");
-		exit(EXIT_FAILURE);
-	}
+		error_lol("Error: Socket failure\n");
 	if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-	{
-		perror("Error: Binding failure");
-		exit(EXIT_FAILURE);
-	}
+		error_lol("Error: Bind failure\n");
 	if (listen(sockfd, 5) < 0)
-	{
-		perror("Error: Listen failure");
-		exit(EXIT_FAILURE);
-	}
-	poll_sockfd.fd = this->sockfd;
-	poll_sockfd.events = POLLIN;
+		error_lol("Error: Listen failure\n");
+	this->poll_sockfd.fd = this->sockfd;
+	this->poll_sockfd.events = POLLIN;
 	this->poll_socket.push_back(poll_sockfd);
 }
 
@@ -313,14 +301,9 @@ void Server::start_connection()
 			if ((t = poll(&(this->poll_socket[p]), 1, 0)))
 			{
 				if (t == -1)
-				{
-					perror("Error: poll failed");
-					exit(1);
-				}
+					error_lol("Error: poll failed\n");
 				if (!p)
-				{
 					this->accept_connection();
-				}
 				else if (p % 2)
 				{ // if unpair
 					this->name_later(p);

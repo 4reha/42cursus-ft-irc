@@ -1,10 +1,10 @@
 SRC		= main.cpp utils.cpp #...
-HEADERS	= Server.hpp Client.hpp
+HEADERS	= Server.hpp Client.hpp channel.hpp
 
 NAME	= ./ircserv
 
 CC = c++
-CFLAGS = -Wall -Werror -Wextra
+CFLAGS = -Wall -Werror -Wextra -std=c++98
 
 RM = /bin/rm -f
 

@@ -15,20 +15,25 @@
 #include <map>
 #include <vector>
 #include "Client.hpp"
+#include "Channel.hpp"
 
+void error_lol(std::string msg);
 bool ft_isspeacial(int c);
 int read_sock(int newsockfd, std::string &cmd);
 
+
+// class Client;
 class Server
 {
 private:
-	int 							port;
-	int 							sockfd;
-	std::string 					password;
-	struct pollfd 					poll_sockfd;
-	struct sockaddr_in 				serv_addr;
-	std::vector<Client *> 			users_DB;
-	std::vector<struct pollfd> 		poll_socket;
+	int 								port;
+	int 								sockfd;
+	std::string 						password;
+	struct pollfd 						poll_sockfd;
+	struct sockaddr_in 					serv_addr;
+	std::vector<Client *> 				users_DB;
+	std::map<std::string, Channel *> 	channel_DB;
+	std::vector<struct pollfd> 			poll_socket;
 
 	void accept_connection();
 	void name_later(int p_i);
@@ -42,6 +47,7 @@ private:
 	void set_username(std::vector<std::string> &pass_cmd, int ui);
 
 	void send_privmsg(std::vector<std::string> &pass_cmd, int ui);
+	void join_channel(std::vector<std::string> &pass_cmd, int ui);
 
 	int search_client(std::string nickname);
 
@@ -52,6 +58,55 @@ public:
 	void start_connection();
 	Client *new_client(struct sockaddr_in cli_addr, int newsockfd);
 };
+
+void Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
+{
+	std::vector<std::string> channels;
+	std::vector<std::string> keys;
+	if (pass_cmd.size() < 2)
+	{
+		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS <JOIN> :Not enough parameters\n");
+		return;
+	}
+	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
+		channels.push_back(token);
+	for (char *token = std::strtok(const_cast<char *>(pass_cmd[2].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
+		keys.push_back(token);
+	for (size_t i = 0; i < channels.size(); ++i)
+	{
+		Channel *tmp_chn = new Channel(channels[i]);
+		std::pair<std::map<std::string, Channel *>::iterator, bool> pair = this->channel_DB.insert(std::make_pair(channels[i], tmp_chn));
+		if (pair.second)
+		{
+			if (this->users_DB[ui]->channels.size() == MAXCHAN)
+				this->users_DB[ui]->pending_msgs.push_back("405 ERR_TOOMANYCHANNELS " + channels[i] + " :You have joined too many channels\n");
+			else	{
+				pair.first->second->Operators.push_back(this->users_DB[ui]);
+				pair.first->second->Members.push_back(this->users_DB[ui]);
+				pair.first->second->Password = keys[i];
+				this->users_DB[ui]->channels.push_back(pair.first->second);
+				pair.first->second->broadcast_msg(":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
+			}
+		}
+		else
+		{
+			delete tmp_chn;
+			if (pair.first->second->isBanned(this->users_DB[ui]->nickname))
+				this->users_DB[ui]->pending_msgs.push_back("474 ERR_BANNEDFROMCHAN " + channels[i] + " :Cannot join channel\n");
+			else if (pair.first->second->isFull())
+				this->users_DB[ui]->pending_msgs.push_back("471 ERR_CHANNELISFULL " + channels[i] + " :Cannot join channel\n");
+			else if (this->users_DB[ui]->channels.size() == MAXCHAN)
+				this->users_DB[ui]->pending_msgs.push_back("405 ERR_TOOMANYCHANNELS " + channels[i] + " :You have joined too many channels\n");
+			else if (pair.first->second->Password == keys[i])	{
+				pair.first->second->Members.push_back(this->users_DB[ui]);
+				this->users_DB[ui]->channels.push_back(pair.first->second);
+				pair.first->second->broadcast_msg(":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
+			}
+			else
+				this->users_DB[ui]->pending_msgs.push_back("475 ERR_BADCHANNELKEY " + channels[i] + " :Cannot join channel\n");
+		}
+	}
+}
 
 int Server::search_client(std::string nickname)
 {
@@ -67,7 +122,7 @@ void Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
 	std::string msg;
 	std::vector<std::string> receivers;
 
-	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, " "))
+	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
 		receivers.push_back(token);
 	for (size_t i = 2; i < pass_cmd.size(); i++)
 		msg += " " + pass_cmd[i];
@@ -75,9 +130,7 @@ void Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
 	{
 		int p;
 		if ((p = this->search_client(receivers[i])) >= 0)
-		{
 			this->users_DB[p]->pending_msgs.push_back(format + receivers[i] + msg + "\n");
-		}
 		else
 			this->users_DB[ui]->pending_msgs.push_back("401 ERR_NOSUCHNICK " + receivers[i] + " :No such nick/channel\n");
 	}
@@ -212,9 +265,9 @@ void Server::cmd_manager(std::string cmd, int rp)
 	{
 		// std::cout << cpy << std::endl;
 		if (cmd_out[0] == "PRIVMSG")
-		{
 			this->send_privmsg(cmd_out, rp);
-		}
+		if (cmd_out[0] == "JOIN")
+			this->join_channel(cmd_out, rp);
 	}
 	else
 	{

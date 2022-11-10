@@ -18,6 +18,7 @@
 
 #define MAXCHAN	4
 
+class Channel;
 class Client
 {
 private:
@@ -35,8 +36,8 @@ public:
 	std::string 						username;
 	struct pollfd 						sock_pollin;
 	struct pollfd 						sock_pollout;
-	std::vector<Channel*> 				channels;
 	std::vector<std::string> 			pending_msgs;
+	std::map<std::string, Channel*> 	channels;
 
 	Client(Client const &cpy);
 	Client(struct sockaddr_in cli_addr, int newsockfd);
@@ -79,3 +80,5 @@ Client::~Client()
 		std::cout << "user " << this->nickname << " has disconnected!" << std::endl;
 	close(this->sockfd);
 }
+
+

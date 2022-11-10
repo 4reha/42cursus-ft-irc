@@ -11,6 +11,7 @@
 #include <iostream>
 #include <poll.h>
 #include <arpa/inet.h>
+#include <algorithm>
 
 #include <map>
 #include "Client.hpp"
@@ -32,15 +33,33 @@ public:
 	Channel(std::string name);
 	~Channel();
 
-	void broadcast_msg(std::string msg);
+	void broadcast_msg(std::string sender, std::string msg);
 	bool isBanned(std::string user);
 	bool isFull();
+	void remove_user(std::string user);
 };
 
-void	Channel::broadcast_msg(std::string msg)
+void Channel::remove_user(std::string user)
+{
+	for (size_t i = 0; i < Members.size(); i++)	{
+		if (user == Members[i]->nickname)	{
+			this->Members.erase(this->Members.begin() + i);
+			break;
+		}
+	}
+	for (size_t i = 0; i < Operators.size(); i++)	{
+		if (user == Operators[i]->nickname)	{
+			this->Operators.erase(this->Operators.begin() + i);
+			break;
+		}
+	}
+}
+
+void	Channel::broadcast_msg(std::string sender, std::string msg)
 {
 	for (size_t i = 0; i < Members.size(); i++)
-		Members[i]->pending_msgs.push_back(msg);
+		if (sender != Members[i]->nickname)
+			Members[i]->pending_msgs.push_back(msg);
 }
 
 bool Channel::isBanned(std::string user)

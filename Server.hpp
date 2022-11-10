@@ -14,15 +14,16 @@
 
 #include <map>
 #include <vector>
-#include "Client.hpp"
 #include "Channel.hpp"
+#include "Client.hpp"
 
 void error_lol(std::string msg);
 bool ft_isspeacial(int c);
 int read_sock(int newsockfd, std::string &cmd);
 
 
-// class Client;
+class Client;
+// class Channel;
 class Server
 {
 private:
@@ -50,6 +51,7 @@ private:
 	void join_channel(std::vector<std::string> &pass_cmd, int ui);
 
 	int search_client(std::string nickname);
+	void	disconnect_client(int ui);
 
 public:
 	Server(char **args);
@@ -59,7 +61,18 @@ public:
 	Client *new_client(struct sockaddr_in cli_addr, int newsockfd);
 };
 
-void Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
+void	Server::disconnect_client(int ui)
+{
+	for (std::map<std::string, Channel*>::iterator it = this->users_DB[ui]->channels.begin(); it != this->users_DB[ui]->channels.end(); it++)
+		it->second->remove_user(this->users_DB[ui]->nickname);
+	delete users_DB[ui];
+	this->users_DB.erase(users_DB.begin() + ui);
+	this->poll_socket.erase(poll_socket.begin() + (ui * 2 +1));
+	this->poll_socket.erase(poll_socket.begin() + (ui * 2 +1));
+
+}
+
+void	Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::vector<std::string> channels;
 	std::vector<std::string> keys;
@@ -70,8 +83,9 @@ void Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
 	}
 	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
 		channels.push_back(token);
-	for (char *token = std::strtok(const_cast<char *>(pass_cmd[2].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
-		keys.push_back(token);
+	if (pass_cmd.size() > 2)
+		for (char *token = std::strtok(const_cast<char *>(pass_cmd[2].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
+			keys.push_back(token);
 	for (size_t i = 0; i < channels.size(); ++i)
 	{
 		Channel *tmp_chn = new Channel(channels[i]);
@@ -83,32 +97,33 @@ void Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
 			else	{
 				pair.first->second->Operators.push_back(this->users_DB[ui]);
 				pair.first->second->Members.push_back(this->users_DB[ui]);
-				pair.first->second->Password = keys[i];
-				this->users_DB[ui]->channels.push_back(pair.first->second);
-				pair.first->second->broadcast_msg(":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
+				if (i < keys.size())
+					pair.first->second->Password = keys[i];
+				this->users_DB[ui]->channels.insert(*pair.first);
+				pair.first->second->broadcast_msg("", ":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
 			}
 		}
 		else
 		{
-			delete tmp_chn;
 			if (pair.first->second->isBanned(this->users_DB[ui]->nickname))
 				this->users_DB[ui]->pending_msgs.push_back("474 ERR_BANNEDFROMCHAN " + channels[i] + " :Cannot join channel\n");
 			else if (pair.first->second->isFull())
 				this->users_DB[ui]->pending_msgs.push_back("471 ERR_CHANNELISFULL " + channels[i] + " :Cannot join channel\n");
 			else if (this->users_DB[ui]->channels.size() == MAXCHAN)
 				this->users_DB[ui]->pending_msgs.push_back("405 ERR_TOOMANYCHANNELS " + channels[i] + " :You have joined too many channels\n");
-			else if (pair.first->second->Password == keys[i])	{
+			else if (i < keys.size() && pair.first->second->Password == keys[i])	{
 				pair.first->second->Members.push_back(this->users_DB[ui]);
-				this->users_DB[ui]->channels.push_back(pair.first->second);
-				pair.first->second->broadcast_msg(":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
+				this->users_DB[ui]->channels.insert(*pair.first);
+				pair.first->second->broadcast_msg("", ":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
 			}
 			else
 				this->users_DB[ui]->pending_msgs.push_back("475 ERR_BADCHANNELKEY " + channels[i] + " :Cannot join channel\n");
+			delete tmp_chn;
 		}
 	}
 }
 
-int Server::search_client(std::string nickname)
+int		Server::search_client(std::string nickname)
 {
 	for (size_t i = 0; i < this->users_DB.size(); i++)
 		if (nickname == this->users_DB[i]->nickname)
@@ -116,7 +131,7 @@ int Server::search_client(std::string nickname)
 	return (-1);
 }
 
-void Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
+void	Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::string format = ":" + this->users_DB[ui]->nickname + " PRIVMSG ";
 	std::string msg;
@@ -129,14 +144,17 @@ void Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
 	for (size_t i = 0; i < receivers.size(); i++)
 	{
 		int p;
-		if ((p = this->search_client(receivers[i])) >= 0)
+		std::map<std::string, Channel*>::iterator it;
+		if (receivers[i][0] != '#' && (p = this->search_client(receivers[i])) >= 0)
 			this->users_DB[p]->pending_msgs.push_back(format + receivers[i] + msg + "\n");
+		else if (receivers[i][0] == '#' && (it = this->users_DB[ui]->channels.find(receivers[i])) != this->users_DB[ui]->channels.end())
+			it->second->broadcast_msg(this->users_DB[ui]->nickname, format + receivers[i] + msg + "\n");
 		else
 			this->users_DB[ui]->pending_msgs.push_back("401 ERR_NOSUCHNICK " + receivers[i] + " :No such nick/channel\n");
 	}
 }
 
-void Server::set_username(std::vector<std::string> &pass_cmd, int ui)
+void	Server::set_username(std::vector<std::string> &pass_cmd, int ui)
 {
 	if (pass_cmd.size() < 5)
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS <USER> :Not enough parameters\n");
@@ -154,7 +172,7 @@ void Server::set_username(std::vector<std::string> &pass_cmd, int ui)
 	}
 }
 
-void Server::set_nickname(std::vector<std::string> &pass_cmd, int ui)
+void	Server::set_nickname(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::string nickName;
 	if (pass_cmd.size() < 2 || (pass_cmd.size() == 2 && pass_cmd[1].length() == 1 && pass_cmd[1][0] == ':'))
@@ -200,7 +218,7 @@ void Server::set_nickname(std::vector<std::string> &pass_cmd, int ui)
 	}
 }
 
-void Server::deny_newClient(int ui, int n)
+void	Server::deny_newClient(int ui, int n)
 {
 	std::cout << "Connection refused from: " << users_DB[ui]->ip_addr;
 	std::cout << ":" << users_DB[ui]->port << ", Using Password: ";
@@ -216,7 +234,7 @@ void Server::deny_newClient(int ui, int n)
 	}
 }
 
-void Server::authenticate_connection(std::vector<std::string> &pass_cmd, int ui)
+void	Server::authenticate_connection(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::string passcode;
 
@@ -237,7 +255,7 @@ void Server::authenticate_connection(std::vector<std::string> &pass_cmd, int ui)
 		this->deny_newClient(ui, pass_cmd.size());
 }
 
-void Server::cmd_manager(std::string cmd, int rp)
+void	Server::cmd_manager(std::string cmd, int rp)
 {
 	std::cout << cmd << std::endl;
 	std::string cpy = cmd;
@@ -275,17 +293,13 @@ void Server::cmd_manager(std::string cmd, int rp)
 	}
 }
 
-void Server::name_later(int p_i)
+void	Server::name_later(int p_i)
 {
 	std::string cmd;
 	int rp = (p_i - 1) / 2;
 	if (!read_sock(users_DB[rp]->sockfd, cmd))
 	{
-		// close(users_DB[rp]->sockfd);
-		delete users_DB[rp];
-		this->users_DB.erase(users_DB.begin() + rp);
-		this->poll_socket.erase(poll_socket.begin() + p_i);
-		this->poll_socket.erase(poll_socket.begin() + p_i);
+		this->disconnect_client(rp);
 	}
 	else
 	{
@@ -295,7 +309,7 @@ void Server::name_later(int p_i)
 	}
 }
 
-void Server::accept_connection()
+void	Server::accept_connection()
 {
 	int newsockfd;
 	struct sockaddr_in cli_addr;
@@ -311,7 +325,7 @@ void Server::accept_connection()
 	this->poll_socket.push_back(this->users_DB.back()->sock_pollout); // pair
 }
 
-Client *Server::new_client(struct sockaddr_in cli_addr, int newsockfd)
+Client*	Server::new_client(struct sockaddr_in cli_addr, int newsockfd)
 {
 	return (new Client(cli_addr, newsockfd));
 }
@@ -331,12 +345,12 @@ Server::~Server()
 	close(this->sockfd);
 }
 
-void Server::init_Server()
+void	Server::init_Server()
 {
 	if ((this->sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 		error_lol("Error: Socket failure\n");
 	if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-		error_lol("Error: Bind failure\n");
+		error_lol("Error: Bind failure");
 	if (listen(sockfd, 5) < 0)
 		error_lol("Error: Listen failure\n");
 	this->poll_sockfd.fd = this->sockfd;
@@ -344,7 +358,7 @@ void Server::init_Server()
 	this->poll_socket.push_back(poll_sockfd);
 }
 
-void Server::start_connection()
+void	Server::start_connection()
 {
 	while (1)
 	{

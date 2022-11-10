@@ -12,6 +12,10 @@
 #include <poll.h>
 #include <arpa/inet.h>
 
+#include <map>
+#include <vector>
+#include "Channel.hpp"
+
 #define MAXCHAN	4
 
 class Client
@@ -19,20 +23,20 @@ class Client
 private:
 public:
 
-	int 							port;
-	int 							sockfd;
-	int	 							nbrChannels;
-
-	bool 							Registered;
-	bool 							Authenticated;
-	bool 							nicked;
-	bool 							named;
-	std::string 					ip_addr;
-	std::string 					nickname;
-	std::string 					username;
-	struct pollfd 					sock_pollin;
-	struct pollfd 					sock_pollout;
-	std::vector<std::string> 		pending_msgs;
+	int 								port;
+	int 								sockfd;
+	
+	bool 								Registered;
+	bool 								Authenticated;
+	bool 								nicked;
+	bool 								named;
+	std::string 						ip_addr;
+	std::string 						nickname;
+	std::string 						username;
+	struct pollfd 						sock_pollin;
+	struct pollfd 						sock_pollout;
+	std::vector<Channel*> 				channels;
+	std::vector<std::string> 			pending_msgs;
 
 	Client(Client const &cpy);
 	Client(struct sockaddr_in cli_addr, int newsockfd);

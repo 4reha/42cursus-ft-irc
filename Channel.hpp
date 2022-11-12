@@ -33,11 +33,30 @@ public:
 	Channel(std::string name);
 	~Channel();
 
-	void broadcast_msg(std::string sender, std::string msg);
-	bool isBanned(std::string user);
-	bool isFull();
-	void remove_user(std::string user);
+	void 	broadcast_msg(std::string sender, std::string msg);
+	bool 	isBanned(std::string user);
+	bool 	isFull();
+	void 	remove_user(std::string user);
+	bool	isMember(std::string user);
+	bool	isOperator(std::string user);
 };
+
+
+bool	 Channel::isMember(std::string user)
+{
+	for (size_t i = 0; i < Members.size(); i++)
+		if (user == Members[i]->nickname)
+			return (true);
+	return (false);
+}
+
+bool	 Channel::isOperator(std::string user)
+{
+	for (size_t i = 0; i < Operators.size(); i++)
+		if (user == Operators[i]->nickname)
+			return (true);
+	return (false);
+}
 
 void Channel::remove_user(std::string user)
 {

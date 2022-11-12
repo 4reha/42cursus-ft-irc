@@ -48,6 +48,7 @@ private:
 	void set_username(std::vector<std::string> &pass_cmd, int ui);
 
 	void send_privmsg(std::vector<std::string> &pass_cmd, int ui);
+	void send_noticemsg(std::vector<std::string> &pass_cmd, int ui);
 	void join_channel(std::vector<std::string> &pass_cmd, int ui);
 
 	int search_client(std::string nickname);
@@ -101,6 +102,8 @@ void	Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
 					pair.first->second->Password = keys[i];
 				this->users_DB[ui]->channels.insert(*pair.first);
 				pair.first->second->broadcast_msg("", ":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
+				this->users_DB[ui]->pending_msgs.push_back("353 RPL_NAMREPLY <" + channels[i] + "> :@test1 +test2 test3\n");
+				
 			}
 		}
 		else
@@ -115,6 +118,7 @@ void	Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
 				pair.first->second->Members.push_back(this->users_DB[ui]);
 				this->users_DB[ui]->channels.insert(*pair.first);
 				pair.first->second->broadcast_msg("", ":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
+				this->users_DB[ui]->pending_msgs.push_back("353 RPL_NAMREPLY <" + channels[i] + "> :@test1 +test2 test3\n");
 			}
 			else
 				this->users_DB[ui]->pending_msgs.push_back("475 ERR_BADCHANNELKEY " + channels[i] + " :Cannot join channel\n");
@@ -131,9 +135,9 @@ int		Server::search_client(std::string nickname)
 	return (-1);
 }
 
-void	Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
+void	Server::send_noticemsg(std::vector<std::string> &pass_cmd, int ui)
 {
-	std::string format = ":" + this->users_DB[ui]->nickname + " PRIVMSG ";
+	std::string format = ":" + this->users_DB[ui]->nickname + " NOTICE ";
 	std::string msg;
 	std::vector<std::string> receivers;
 
@@ -149,8 +153,38 @@ void	Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
 			this->users_DB[p]->pending_msgs.push_back(format + receivers[i] + msg + "\n");
 		else if (receivers[i][0] == '#' && (it = this->users_DB[ui]->channels.find(receivers[i])) != this->users_DB[ui]->channels.end())
 			it->second->broadcast_msg(this->users_DB[ui]->nickname, format + receivers[i] + msg + "\n");
+	}
+}
+
+void	Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
+{
+	std::string format = ":" + this->users_DB[ui]->nickname + " PRIVMSG ";
+	std::string msg;
+	std::vector<std::string> receivers;
+
+	if (pass_cmd.size() < 3)	{
+		this->users_DB[ui]->pending_msgs.push_back("412 ERR_NOTEXTTOSEND :No text to send\n");
+		return ;
+	}
+	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
+		receivers.push_back(token);
+	for (size_t i = 2; i < pass_cmd.size(); i++)
+		msg += " " + pass_cmd[i];
+	for (size_t i = 0; i < receivers.size(); i++)
+	{
+		int p;
+		std::map<std::string, Channel*>::iterator it;
+		if (receivers[i][0] != '#' && (p = this->search_client(receivers[i])) >= 0)
+			this->users_DB[p]->pending_msgs.push_back(format + receivers[i] + msg + "\n");
+		else if (receivers[i][0] == '#' && (it = this->channel_DB.find(receivers[i])) != this->channel_DB.end())
+		{
+			if (it->second->isMember(this->users_DB[ui]->nickname))
+				it->second->broadcast_msg(this->users_DB[ui]->nickname, format + receivers[i] + msg + "\n");
+			else
+				this->users_DB[ui]->pending_msgs.push_back("404 ERR_CANNOTSENDTOCHAN <" + receivers[i] + "> :Cannot send to channel\n");
+		}
 		else
-			this->users_DB[ui]->pending_msgs.push_back("401 ERR_NOSUCHNICK " + receivers[i] + " :No such nick/channel\n");
+			this->users_DB[ui]->pending_msgs.push_back("401 ERR_NOSUCHNICK <" + receivers[i] + "> :No such nick/channel\n");
 	}
 }
 
@@ -284,6 +318,8 @@ void	Server::cmd_manager(std::string cmd, int rp)
 		// std::cout << cpy << std::endl;
 		if (cmd_out[0] == "PRIVMSG")
 			this->send_privmsg(cmd_out, rp);
+		if (cmd_out[0] == "NOTICE")
+			this->send_noticemsg(cmd_out, rp);
 		if (cmd_out[0] == "JOIN")
 			this->join_channel(cmd_out, rp);
 	}
@@ -298,15 +334,9 @@ void	Server::name_later(int p_i)
 	std::string cmd;
 	int rp = (p_i - 1) / 2;
 	if (!read_sock(users_DB[rp]->sockfd, cmd))
-	{
 		this->disconnect_client(rp);
-	}
 	else
-	{
-		std::vector<std::string> args;
-		for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), "\r\n"); token != NULL; token = std::strtok(nullptr, "\r\n"))
-			this->cmd_manager(token, rp);
-	}
+		this->cmd_manager(cmd, rp);
 }
 
 void	Server::accept_connection()

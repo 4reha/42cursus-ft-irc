@@ -8,18 +8,18 @@ int read_sock(int newsockfd, std::string &cmd)
 {
 	int i = 0;
 	int j = 0;
-    char buffer;
+    char buffer = 0;
 
 	while ((i = recv(newsockfd, &buffer,1, 0)))
-	{
-		if (i == -1)	{
+	{		if (i == -1)	{
 			perror("Error: In Reading Socket");
 			exit(EXIT_FAILURE);
 		}
 		j += i;
-		cmd += buffer;
 		if (buffer == '\n')
 			break;
+		if (buffer != '\r')
+			cmd += buffer;
 		buffer = 0;
 	}
 	return (j);

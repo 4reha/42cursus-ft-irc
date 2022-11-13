@@ -36,22 +36,19 @@ private:
 	std::map<std::string, Channel *> 	channel_DB;
 	std::vector<struct pollfd> 			poll_socket;
 
-	void accept_connection();
-	void name_later(int p_i);
-	void cmd_manager(std::string cmd, int rp);
+	void	accept_connection();
+	void	name_later(int p_i);
+	void	cmd_manager(std::string cmd, int rp);	
+	void	PASScmd(std::vector<std::string> &pass_cmd, int ui);
+	void	register_newClient(int ui);
+	void	deny_newClient(int ui, int n);	
+	void	NICKcmd(std::vector<std::string> &pass_cmd, int ui);
+	void	USERcmd(std::vector<std::string> &pass_cmd, int ui);	
+	void	PRIVMSGcmd(std::vector<std::string> &pass_cmd, int ui);
+	void	NOTICEcmd(std::vector<std::string> &pass_cmd, int ui);
+	void	JOINcmd(std::vector<std::string> &pass_cmd, int ui);
 
-	void authenticate_connection(std::vector<std::string> &pass_cmd, int ui);
-	void register_newClient(int ui);
-	void deny_newClient(int ui, int n);
-
-	void set_nickname(std::vector<std::string> &pass_cmd, int ui);
-	void set_username(std::vector<std::string> &pass_cmd, int ui);
-
-	void send_privmsg(std::vector<std::string> &pass_cmd, int ui);
-	void send_noticemsg(std::vector<std::string> &pass_cmd, int ui);
-	void join_channel(std::vector<std::string> &pass_cmd, int ui);
-
-	int search_client(std::string nickname);
+	int		search_client(std::string nickname);
 	void	disconnect_client(int ui);
 
 public:
@@ -65,7 +62,7 @@ public:
 void	Server::disconnect_client(int ui)
 {
 	for (std::map<std::string, Channel*>::iterator it = this->users_DB[ui]->channels.begin(); it != this->users_DB[ui]->channels.end(); it++)
-		it->second->remove_user(this->users_DB[ui]->nickname);
+		it->second->remove_user(this->users_DB[ui]);
 	delete users_DB[ui];
 	this->users_DB.erase(users_DB.begin() + ui);
 	this->poll_socket.erase(poll_socket.begin() + (ui * 2 +1));
@@ -73,10 +70,11 @@ void	Server::disconnect_client(int ui)
 
 }
 
-void	Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
+void	Server::JOINcmd(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::vector<std::string> channels;
 	std::vector<std::string> keys;
+	std::string join_msg = ":" + this->users_DB[ui]->nickname + "!" + this->users_DB[ui]->username + "@" + this->users_DB[ui]->ip_addr + " JOIN ";
 	if (pass_cmd.size() < 2)
 	{
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS <JOIN> :Not enough parameters\n");
@@ -89,36 +87,39 @@ void	Server::join_channel(std::vector<std::string> &pass_cmd, int ui)
 			keys.push_back(token);
 	for (size_t i = 0; i < channels.size(); ++i)
 	{
-		Channel *tmp_chn = new Channel(channels[i]);
+		Channel *tmp_chn = new Channel(channels[i], "snm");
 		std::pair<std::map<std::string, Channel *>::iterator, bool> pair = this->channel_DB.insert(std::make_pair(channels[i], tmp_chn));
 		if (pair.second)
 		{
 			if (this->users_DB[ui]->channels.size() == MAXCHAN)
 				this->users_DB[ui]->pending_msgs.push_back("405 ERR_TOOMANYCHANNELS " + channels[i] + " :You have joined too many channels\n");
 			else	{
-				pair.first->second->Operators.push_back(this->users_DB[ui]);
-				pair.first->second->Members.push_back(this->users_DB[ui]);
-				if (i < keys.size())
+				pair.first->second->Members.insert(std::make_pair(this->users_DB[ui], std::string("Oov")));
+				if (i < keys.size())	{
+					pair.first->second->setModes("k", 1);
 					pair.first->second->Password = keys[i];
+				}
 				this->users_DB[ui]->channels.insert(*pair.first);
-				pair.first->second->broadcast_msg("", ":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
-				this->users_DB[ui]->pending_msgs.push_back("353 RPL_NAMREPLY <" + channels[i] + "> :@test1 +test2 test3\n");
-				
+				pair.first->second->broadcast_msg(nullptr, join_msg + channels[i] + "\n");
+				this->users_DB[ui]->pending_msgs.push_back("353 RPL_NAMREPLY = " + channels[i] + pair.first->second->getUsers() + "\n");
+				this->users_DB[ui]->pending_msgs.push_back("366 RPL_ENDOFNAMES = " + channels[i] + " :End of /NAMES list\n");	
 			}
 		}
 		else
 		{
-			if (pair.first->second->isBanned(this->users_DB[ui]->nickname))
+			if (pair.first->second->isBanned(this->users_DB[ui]))
 				this->users_DB[ui]->pending_msgs.push_back("474 ERR_BANNEDFROMCHAN " + channels[i] + " :Cannot join channel\n");
 			else if (pair.first->second->isFull())
 				this->users_DB[ui]->pending_msgs.push_back("471 ERR_CHANNELISFULL " + channels[i] + " :Cannot join channel\n");
 			else if (this->users_DB[ui]->channels.size() == MAXCHAN)
 				this->users_DB[ui]->pending_msgs.push_back("405 ERR_TOOMANYCHANNELS " + channels[i] + " :You have joined too many channels\n");
-			else if (i < keys.size() && pair.first->second->Password == keys[i])	{
-				pair.first->second->Members.push_back(this->users_DB[ui]);
-				this->users_DB[ui]->channels.insert(*pair.first);
-				pair.first->second->broadcast_msg("", ":" + this->users_DB[ui]->nickname + " JOIN " + channels[i] + "\n");
-				this->users_DB[ui]->pending_msgs.push_back("353 RPL_NAMREPLY <" + channels[i] + "> :@test1 +test2 test3\n");
+			else if ((i < keys.size() && pair.first->second->Password == keys[i]) || (i >= keys.size() && pair.first->second->Password == ""))	{
+				if (pair.first->second->Members.insert(std::make_pair(this->users_DB[ui], std::string("v"))).second)	{
+					this->users_DB[ui]->channels.insert(*pair.first);
+					pair.first->second->broadcast_msg(nullptr, join_msg + channels[i] + "\n");
+					this->users_DB[ui]->pending_msgs.push_back("353 RPL_NAMREPLY = " + channels[i] + pair.first->second->getUsers() + "\n");
+					this->users_DB[ui]->pending_msgs.push_back("366 RPL_ENDOFNAMES = " + channels[i] + " :End of /NAMES list\n");
+				}
 			}
 			else
 				this->users_DB[ui]->pending_msgs.push_back("475 ERR_BADCHANNELKEY " + channels[i] + " :Cannot join channel\n");
@@ -135,7 +136,7 @@ int		Server::search_client(std::string nickname)
 	return (-1);
 }
 
-void	Server::send_noticemsg(std::vector<std::string> &pass_cmd, int ui)
+void	Server::NOTICEcmd(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::string format = ":" + this->users_DB[ui]->nickname + " NOTICE ";
 	std::string msg;
@@ -152,11 +153,11 @@ void	Server::send_noticemsg(std::vector<std::string> &pass_cmd, int ui)
 		if (receivers[i][0] != '#' && (p = this->search_client(receivers[i])) >= 0)
 			this->users_DB[p]->pending_msgs.push_back(format + receivers[i] + msg + "\n");
 		else if (receivers[i][0] == '#' && (it = this->users_DB[ui]->channels.find(receivers[i])) != this->users_DB[ui]->channels.end())
-			it->second->broadcast_msg(this->users_DB[ui]->nickname, format + receivers[i] + msg + "\n");
+			it->second->broadcast_msg(this->users_DB[ui], format + receivers[i] + msg + "\n");
 	}
 }
 
-void	Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
+void	Server::PRIVMSGcmd(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::string format = ":" + this->users_DB[ui]->nickname + " PRIVMSG ";
 	std::string msg;
@@ -178,8 +179,8 @@ void	Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
 			this->users_DB[p]->pending_msgs.push_back(format + receivers[i] + msg + "\n");
 		else if (receivers[i][0] == '#' && (it = this->channel_DB.find(receivers[i])) != this->channel_DB.end())
 		{
-			if (it->second->isMember(this->users_DB[ui]->nickname))
-				it->second->broadcast_msg(this->users_DB[ui]->nickname, format + receivers[i] + msg + "\n");
+			if (it->second->isMember(this->users_DB[ui]))
+				it->second->broadcast_msg(this->users_DB[ui], format + receivers[i] + msg + "\n");
 			else
 				this->users_DB[ui]->pending_msgs.push_back("404 ERR_CANNOTSENDTOCHAN <" + receivers[i] + "> :Cannot send to channel\n");
 		}
@@ -188,7 +189,7 @@ void	Server::send_privmsg(std::vector<std::string> &pass_cmd, int ui)
 	}
 }
 
-void	Server::set_username(std::vector<std::string> &pass_cmd, int ui)
+void	Server::USERcmd(std::vector<std::string> &pass_cmd, int ui)
 {
 	if (pass_cmd.size() < 5)
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS <USER> :Not enough parameters\n");
@@ -206,7 +207,7 @@ void	Server::set_username(std::vector<std::string> &pass_cmd, int ui)
 	}
 }
 
-void	Server::set_nickname(std::vector<std::string> &pass_cmd, int ui)
+void	Server::NICKcmd(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::string nickName;
 	if (pass_cmd.size() < 2 || (pass_cmd.size() == 2 && pass_cmd[1].length() == 1 && pass_cmd[1][0] == ':'))
@@ -268,7 +269,7 @@ void	Server::deny_newClient(int ui, int n)
 	}
 }
 
-void	Server::authenticate_connection(std::vector<std::string> &pass_cmd, int ui)
+void	Server::PASScmd(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::string passcode;
 
@@ -301,27 +302,27 @@ void	Server::cmd_manager(std::string cmd, int rp)
 		if (this->users_DB[rp]->Registered)
 			this->users_DB[rp]->pending_msgs.push_back("462 ERR_ALREADYREGISTRED :PASS may not reregister\n");
 		else
-			this->authenticate_connection(cmd_out, rp);
+			this->PASScmd(cmd_out, rp);
 	}
 	else if (this->users_DB[rp]->Authenticated && cmd_out[0] == "NICK")
 	{
-		this->set_nickname(cmd_out, rp);
+		this->NICKcmd(cmd_out, rp);
 	}
 	else if (this->users_DB[rp]->Authenticated && cmd_out[0] == "USER")
 	{
 		if (this->users_DB[rp]->Registered)
 			this->users_DB[rp]->pending_msgs.push_back("462 ERR_ALREADYREGISTRED :USER may not reregister\n");
-		this->set_username(cmd_out, rp);
+		this->USERcmd(cmd_out, rp);
 	}
 	else if (this->users_DB[rp]->Registered)
 	{
 		// std::cout << cpy << std::endl;
 		if (cmd_out[0] == "PRIVMSG")
-			this->send_privmsg(cmd_out, rp);
+			this->PRIVMSGcmd(cmd_out, rp);
 		if (cmd_out[0] == "NOTICE")
-			this->send_noticemsg(cmd_out, rp);
+			this->NOTICEcmd(cmd_out, rp);
 		if (cmd_out[0] == "JOIN")
-			this->join_channel(cmd_out, rp);
+			this->JOINcmd(cmd_out, rp);
 	}
 	else
 	{

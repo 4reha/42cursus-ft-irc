@@ -23,81 +23,103 @@ class Channel
 private:
 	/* data */
 public:
-	size_t						maxMembers;
-	std::string 				Name;
-	std::string 				Password;
-	std::vector<Client *> 		Members;
-	std::vector<Client *> 		Operators;
-	std::vector<Client *> 		Banned;
+	size_t								maxMembers;
+	std::string 						Name;
+	std::string 						Modes;
+	std::string 						Password;
+	std::map<Client *, std::string> 	Members;
+	std::vector<Client *> 				Banned;
 
-	Channel(std::string name);
+	Channel(std::string name, std::string modes);
 	~Channel();
 
-	void 	broadcast_msg(std::string sender, std::string msg);
-	bool 	isBanned(std::string user);
+	void 	broadcast_msg(Client* sender, std::string msg);
+	bool 	isBanned(Client* user);
 	bool 	isFull();
-	void 	remove_user(std::string user);
-	bool	isMember(std::string user);
-	bool	isOperator(std::string user);
+	void 	remove_user(Client* user);
+	bool	isMember(Client* user);
+	bool	isOperator(Client* user);
+	void	setModes(std::string modes, bool op);
+
+	std::string getUsers();
 };
 
-
-bool	 Channel::isMember(std::string user)
+void Channel::setModes(std::string modes, bool op) // 1 = + // 0 == -
 {
-	for (size_t i = 0; i < Members.size(); i++)
-		if (user == Members[i]->nickname)
-			return (true);
-	return (false);
-}
-
-bool	 Channel::isOperator(std::string user)
-{
-	for (size_t i = 0; i < Operators.size(); i++)
-		if (user == Operators[i]->nickname)
-			return (true);
-	return (false);
-}
-
-void Channel::remove_user(std::string user)
-{
-	for (size_t i = 0; i < Members.size(); i++)	{
-		if (user == Members[i]->nickname)	{
-			this->Members.erase(this->Members.begin() + i);
-			break;
-		}
+	if (op)	{
+		for (size_t i = 0; i < modes.size(); i++)
+			if ( this->Modes.find(modes[i]) == this->Modes.npos)
+				this->Modes += modes[i];
 	}
-	for (size_t i = 0; i < Operators.size(); i++)	{
-		if (user == Operators[i]->nickname)	{
-			this->Operators.erase(this->Operators.begin() + i);
-			break;
+	else	{
+		for (size_t i = 0, p; i < modes.size(); i++)	{
+			if ((p =this->Modes.find(modes[i])) != this->Modes.npos)
+				this->Modes.erase(this->Modes.begin() + p);
 		}
 	}
 }
 
-void	Channel::broadcast_msg(std::string sender, std::string msg)
+std::string Channel::getUsers()
 {
-	for (size_t i = 0; i < Members.size(); i++)
-		if (sender != Members[i]->nickname)
-			Members[i]->pending_msgs.push_back(msg);
+	std::string str = " :";
+	for (std::map<Client *,std::string>::iterator it = Members.begin(); it != Members.end(); it++)	{
+		if (this->isOperator(it->first))
+			str += "@" + it->first->nickname + " ";
+		else
+			str += it->first->nickname + " ";
+	}
+	return (str);
 }
 
-bool Channel::isBanned(std::string user)
+bool	 Channel::isMember(Client* user)
+{
+	std::map<Client*,std::string>::iterator it = this->Members.find(user);
+	if (it != this->Members.end())
+        return (true);
+	return (false);
+}
+
+bool	 Channel::isOperator(Client* user)
+{
+	std::map<Client *,std::string>::iterator it = this->Members.find(user);
+	if (it == this->Members.end())
+        return (false);
+	if (it->second.find('o') != it->second.npos)
+		return (true);
+	return (false);
+}
+
+void Channel::remove_user(Client* user)
+{
+	this->Members.erase(user);
+}
+
+void	Channel::broadcast_msg(Client* sender, std::string msg)
+{
+	for (std::map<Client*,std::string>::iterator it = Members.begin(); it != Members.end(); it++)	{
+		if (it->first != sender)
+			it->first->pending_msgs.push_back(msg);
+	}
+}
+
+bool Channel::isBanned(Client* user)
 {
 	for (size_t i = 0; i < this->Banned.size(); i++)
-		if (user == Banned[i]->nickname)
+		if (user->nickname == Banned[i]->nickname)
 			return (true);
 	return (false);
 }
 
 bool Channel::isFull()
 {
-	return (this->Members.size() == this->maxMembers);
+	return (this->maxMembers > 0 && this->Members.size() == this->maxMembers);
 }
 
-Channel::Channel(std::string name)
+Channel::Channel(std::string name, std::string modes)
 {
 	this->Name = name;
-	this->maxMembers = 5;
+	this->maxMembers = -1;
+	this->setModes(modes, 1);
 }
 
 Channel::~Channel()

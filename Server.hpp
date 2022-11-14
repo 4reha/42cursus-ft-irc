@@ -19,9 +19,9 @@
 
 bool	is_channel_prefix(int c);
 bool 	isModeChar(int c);
-void error_lol(std::string msg);
-bool ft_isspeacial(int c);
-int read_sock(int newsockfd, std::string &cmd);
+void 	error_lol(std::string msg);
+bool 	ft_isspeacial(int c);
+int 	read_sock(int newsockfd, std::string &cmd);
 
 
 // class Client;
@@ -478,7 +478,7 @@ void	Server::accept_connection()
 
 	if ((newsockfd = accept(this->sockfd, (struct sockaddr *)&cli_addr, &clilen)) == -1)
 	{
-		perror("Error: Accepting failure");
+		error_lol("Error: Accepting failure");
 		exit(EXIT_FAILURE);
 	}
 	this->users_DB.push_back(this->new_client(cli_addr, newsockfd));

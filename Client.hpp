@@ -14,7 +14,6 @@
 
 #include <map>
 #include <vector>
-#include "Channel.hpp"
 
 #define MAXCHAN	4
 
@@ -41,8 +40,17 @@ public:
 
 	Client(Client const &cpy);
 	Client(struct sockaddr_in cli_addr, int newsockfd);
+	void	leaveAllChans();
 	~Client();
 };
+
+#include "Channel.hpp"
+void	Client::leaveAllChans()
+{
+	for (std::map<std::string, Channel*>::iterator it = channels.begin(); it != channels.end(); it++)
+		it->second->Members.erase(this);
+	this->channels.clear();
+}
 
 Client::Client(struct sockaddr_in cli_addr, int newsockfd)
 {

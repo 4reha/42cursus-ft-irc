@@ -31,3 +31,19 @@ bool	ft_isspeacial(int c)
 		return (true);
 	return (false);
 }
+
+bool 	isModeChar(int c)
+{
+	if (c == 'O' || c == 'o' || c == 'v' || c == 'a' || c == 'i' || c == 'm' \
+		|| c == 'n' || c == 'q' || c == 'p' || c == 's' || c == 'r' || c == 't' \
+		|| c == 'k' || c == 'l' || c == 'b' || c == 'e' || c == 'I')
+		return (true);
+	return (false);
+}
+
+bool	is_channel_prefix(int c)
+{
+	if (c == '+' || c == '&' || c == '!' || c == '#')
+		return (true);
+	return (false);
+}

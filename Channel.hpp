@@ -14,8 +14,8 @@
 #include <algorithm>
 
 #include <map>
+#include <set>
 #include "Client.hpp"
-// #include "Server.hpp"
 
 class Client;
 class Channel
@@ -26,9 +26,10 @@ public:
 	size_t								maxMembers;
 	std::string 						Name;
 	std::string 						Modes;
+	std::string							Topic;
 	std::string 						Password;
 	std::map<Client *, std::string> 	Members;
-	std::vector<Client *> 				Banned;
+	std::set<std::string> 				Banned;
 
 	Channel(std::string name, std::string modes);
 	~Channel();
@@ -39,20 +40,106 @@ public:
 	void 	remove_user(Client* user);
 	bool	isMember(Client* user);
 	bool	isOperator(Client* user);
-	void	setModes(std::string modes, bool op);
+	void	setModes(std::string modes);
+	bool	setMemModes(std::string m, std::string user);
+	void	setLimit(char m, std::string limit);
+	bool	isInvitOnly();
+	void	Bann(std::string user, char op);
+	void    setTopic(std::vector<std::string> args);
+	bool	isMode(char mode);
+	bool	UserIsV(Client* user);
+	
 
 	std::string getUsers();
 };
 
-void Channel::setModes(std::string modes, bool op) // 1 = + // 0 == -
+bool	Channel::UserIsV(Client* user)
 {
-	if (op)	{
-		for (size_t i = 0; i < modes.size(); i++)
+	std::map<Client *,std::string>::iterator it = this->Members.find(user);
+	if (it == this->Members.end())
+        return (false);
+	if (it->second.find('v') != it->second.npos)
+		return (true);
+	return (false);
+}
+
+bool	Channel::isMode(char mode)
+{
+	if (this->Modes.find(mode) != this->Modes.npos)
+		return (true);
+	return (false);
+}
+
+void	Channel::setTopic(std::vector<std::string> args)
+{
+	std::string topic;
+	topic = args[2];
+	for (size_t i = 3; i < args.size(); i++)
+		topic += " " + args[i];
+}
+
+void	Channel::Bann(std::string user, char op)
+{
+	if (op == '+')	{
+		this->Banned.insert(user);
+		for (std::map<Client *,std::string>::iterator it = Members.begin(); it != Members.end(); it++)	{
+			if (it->first->nickname == user)	{
+				this->Members.erase(it);
+				return ;
+			}
+		}
+		std::cout << user << " is banned" << std::endl;
+	}
+	else
+		this->Banned.erase(user);
+}
+
+void	Channel::setLimit(char m, std::string limit)
+{
+	if (m == '+')	{
+		this->maxMembers = std::stoi(limit);
+		this->setModes("+l");
+	}
+	else	{
+		this->setModes("-l");
+		this->maxMembers = std::stoi(limit);
+	}
+	
+}
+
+bool	Channel::setMemModes(std::string m, std::string user)
+{
+	for (std::map<Client *,std::string>::iterator it = Members.begin(); it != Members.end(); it++)	{
+		if (it->first->nickname == user)	{
+			if (m[0] == '+')	{
+				if (it->second.find(m[1]) != it->second.npos)
+					it->second += m[1];
+			}
+			else	{
+				size_t p;
+				if ((p = it->second.find(m[1])) == it->second.npos)
+					it->second.erase(it->second.begin() + p);
+			}
+			return (true);
+		}
+	}
+	return (false);
+}
+
+bool	Channel::isInvitOnly()
+{
+	return (this->Modes.find("i")!= std::string::npos);
+}
+
+void Channel::setModes(std::string modes)
+{
+	if (modes[0] == '+')	{
+		for (size_t i = 1; i < modes.size(); i++)
 			if ( this->Modes.find(modes[i]) == this->Modes.npos)
 				this->Modes += modes[i];
 	}
 	else	{
-		for (size_t i = 0, p; i < modes.size(); i++)	{
+		for (size_t i = 1, p; i < modes.size(); i++)	{
 			if ((p =this->Modes.find(modes[i])) != this->Modes.npos)
 				this->Modes.erase(this->Modes.begin() + p);
 		}
@@ -104,8 +191,8 @@ void	Channel::broadcast_msg(Client* sender, std::string msg)
 
 bool Channel::isBanned(Client* user)
 {
-	for (size_t i = 0; i < this->Banned.size(); i++)
-		if (user->nickname == Banned[i]->nickname)
+	for (std::set<std::string>::iterator it = this->Banned.begin(); it != this->Banned.end(); it++)
+		if (user->nickname == *it)
 			return (true);
 	return (false);
 }
@@ -119,7 +206,7 @@ Channel::Channel(std::string name, std::string modes)
 {
 	this->Name = name;
 	this->maxMembers = -1;
-	this->setModes(modes, 1);
+	this->setModes(modes);
 }
 
 Channel::~Channel()

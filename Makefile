@@ -1,5 +1,5 @@
 SRC		= main.cpp utils.cpp #...
-HEADERS	= Server.hpp Client.hpp channel.hpp
+HEADERS	= Server.hpp Client.hpp Channel.hpp
 
 NAME	= ./ircserv
 

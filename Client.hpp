@@ -33,6 +33,7 @@ public:
 	std::string 						ip_addr;
 	std::string 						nickname;
 	std::string 						username;
+	std::string                         userinfo;
 	struct pollfd 						sock_pollin;
 	struct pollfd 						sock_pollout;
 	std::vector<std::string> 			pending_msgs;
@@ -40,11 +41,18 @@ public:
 
 	Client(Client const &cpy);
 	Client(struct sockaddr_in cli_addr, int newsockfd);
-	void	leaveAllChans();
 	~Client();
+	void	leaveAllChans();
+	void    build();
 };
 
 #include "Channel.hpp"
+
+void 	Client::build()
+{
+	this->userinfo = this->nickname + "!" + this->username + "@" + this->ip_addr;
+}
+
 void	Client::leaveAllChans()
 {
 	for (std::map<std::string, Channel*>::iterator it = channels.begin(); it != channels.end(); it++)

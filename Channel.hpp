@@ -98,11 +98,9 @@ void	Channel::setLimit(char m, std::string limit)
 {
 	if (m == '+')	{
 		this->maxMembers = std::stoi(limit);
-		this->setModes("+l");
 	}
 	else	{
-		this->setModes("-l");
-		this->maxMembers = std::stoi(limit);
+		this->maxMembers = -1;
 	}
 	
 }
@@ -185,7 +183,10 @@ void	Channel::broadcast_msg(Client* sender, std::string msg)
 {
 	for (std::map<Client*,std::string>::iterator it = Members.begin(); it != Members.end(); it++)	{
 		if (it->first != sender)
+		{
+			std::cout << "sent to: " << it->first->nickname << std::endl;
 			it->first->pending_msgs.push_back(msg);
+		}
 	}
 }
 
@@ -199,7 +200,7 @@ bool Channel::isBanned(Client* user)
 
 bool Channel::isFull()
 {
-	return (this->maxMembers > 0 && this->Members.size() == this->maxMembers);
+	return (this->maxMembers > 0 && this->Members.size() >= this->maxMembers);
 }
 
 Channel::Channel(std::string name, std::string modes)

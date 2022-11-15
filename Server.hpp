@@ -14,7 +14,7 @@
 
 #include <map>
 #include <vector>
-#include "Client.hpp"
+
 #include "Channel.hpp"
 
 bool	is_channel_prefix(int c);
@@ -52,9 +52,11 @@ private:
 	void	JOINcmd(std::vector<std::string> &pass_cmd, int ui);
 	void	MODEcmd(std::vector<std::string> &pass_cmd, int ui);
 	void	TOPICcmd(std::vector<std::string> &pass_cmd, int ui);
+	void	KICKcmd(std::vector<std::string> &pass_cmd, int ui);
 
 	int		search_client(std::string nickname);
 	void	disconnect_client(int ui);
+	void	welcome_client(int ui);
 
 public:
 	Server(char **args);
@@ -63,6 +65,52 @@ public:
 	void start_connection();
 	Client *new_client(struct sockaddr_in cli_addr, int newsockfd);
 };
+
+void	Server::KICKcmd(std::vector<std::string> &pass_cmd, int ui)
+{
+	if (pass_cmd.size() < 3)	{
+		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS TOPIC :Not enough parameters\n");
+		return ;
+	}
+	std::map<std::string, Channel*>::iterator it;
+	std::string format = ":" + this->users_DB[ui]->userinfo + " KICK ";
+	std::vector<std::string>	channels;
+	std::vector<std::string>	users;
+	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
+		channels.push_back(token);
+	for (char *token = std::strtok(const_cast<char *>(pass_cmd[2].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
+		users.push_back(token);
+	for (size_t i = 0,  j = 0; i < channels.size(), j < users.size(); i++, j++)	{
+		if ((it = channel_DB.find(channels[i])) == channel_DB.end())
+			this->users_DB[ui]->pending_msgs.push_back("403 ERR_NOSUCHCHANNEL " + channels[i] + " :No such channel\n");
+		else if (!it->second->isMember(this->users_DB[ui]))
+			this->users_DB[ui]->pending_msgs.push_back("442 ERR_NOTONCHANNEL " + channels[i] + " :You're not on that channel\n");
+		else if (!it->second->isOperator(this->users_DB[ui]))
+			this->users_DB[ui]->pending_msgs.push_back("482 ERR_CHANOPRIVSNEEDED " + channels[i] + " :You're not channel operator\n");
+		int l = this->search_client(users[j]);
+		if (l >= 0)	{
+			if (it->second->isMember(this->users_DB[l]))	{
+				it->second->broadcast_msg(nullptr, format + " " + channels[i] + " " + users[j] + "\n");
+				it->second->remove_user(this->users_DB[l]);
+			}
+		}
+
+	}
+}
+
+void	Server::welcome_client(int ui)
+{
+	this->users_DB[ui]->Registered = true;
+	this->users_DB[ui]->build();
+	std::cout << "New Client has connected from " << this->users_DB[ui]->ip_addr;
+	std::cout << ":" << this->users_DB[ui]->port << " as: " << this->users_DB[ui]->nickname;
+	std::cout << " id: " << ui << std::endl;
+	this->users_DB[ui]->pending_msgs.push_back("001 " + this->users_DB[ui]->nickname + " :Welcome to the Internet Relay Network " + this->users_DB[ui]->userinfo + "\n");
+	this->users_DB[ui]->pending_msgs.push_back("002 " + this->users_DB[ui]->nickname + " :Your host is e-LEMON-tor, running version 1.12\n");
+	this->users_DB[ui]->pending_msgs.push_back("003 " + this->users_DB[ui]->nickname + " :This server was created 15-11-2002\n");
+	this->users_DB[ui]->pending_msgs.push_back("004 " + this->users_DB[ui]->nickname + " :e-LEMON-ator 1.12 0 *\n");
+
+}
 
 void	Server::TOPICcmd(std::vector<std::string> &pass_cmd, int ui)
 {
@@ -125,7 +173,7 @@ void	Server::MODEcmd(std::vector<std::string> &pass_cmd, int ui)
 				}
 			}
 			else if (pass_cmd[2][i] == 'l')	{
-				if (p < pass_cmd.size() || pass_cmd[2][i] == '-')
+				if (p < pass_cmd.size() || pass_cmd[2][0] == '-')
 					it->second->setLimit(pass_cmd[2][0], pass_cmd[p++]);
 				else if (pass_cmd[2][0] == '+') {
 					this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS MODE :Not enough parameters\n");
@@ -186,7 +234,7 @@ void	Server::JOINcmd(std::vector<std::string> &pass_cmd, int ui)
 {
 	std::vector<std::string> channels;
 	std::vector<std::string> keys;
-	std::string join_msg = ":" + this->users_DB[ui]->nickname + "!" + this->users_DB[ui]->username + "@" + this->users_DB[ui]->ip_addr + " JOIN ";
+	std::string join_msg = ":" + this->users_DB[ui]->userinfo+ " JOIN ";
 	if (pass_cmd.size() < 2)
 	{
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS <JOIN> :Not enough parameters\n");
@@ -207,7 +255,7 @@ void	Server::JOINcmd(std::vector<std::string> &pass_cmd, int ui)
 			this->users_DB[ui]->pending_msgs.push_back("403 ERR_NOSUCHCHANNEL " + channels[i] + " :Unknown channel category\n");
 			continue;
 		}
-		Channel *tmp_chn = new Channel(channels[i], "+sn");
+		Channel *tmp_chn = new Channel(channels[i], "+");
 		std::pair<std::map<std::string, Channel *>::iterator, bool> pair = this->channel_DB.insert(std::make_pair(channels[i], tmp_chn));
 		if (pair.second)
 		{
@@ -221,8 +269,8 @@ void	Server::JOINcmd(std::vector<std::string> &pass_cmd, int ui)
 				}
 				this->users_DB[ui]->channels.insert(*pair.first);
 				pair.first->second->broadcast_msg(nullptr, join_msg + channels[i] + "\n");
-				this->users_DB[ui]->pending_msgs.push_back("353 RPL_NAMREPLY = " + channels[i] + pair.first->second->getUsers() + "\n");
-				this->users_DB[ui]->pending_msgs.push_back("366 RPL_ENDOFNAMES = " + channels[i] + " :End of /NAMES list\n");	
+				this->users_DB[ui]->pending_msgs.push_back("353 " + this->users_DB[ui]->nickname + " = " + channels[i] + pair.first->second->getUsers() + "\n");
+				this->users_DB[ui]->pending_msgs.push_back("366 " + this->users_DB[ui]->nickname + " " + channels[i] + " :End of /NAMES list\n");
 			}
 		}
 		else
@@ -239,8 +287,8 @@ void	Server::JOINcmd(std::vector<std::string> &pass_cmd, int ui)
 				if (pair.first->second->Members.insert(std::make_pair(this->users_DB[ui], std::string(""))).second)	{
 					this->users_DB[ui]->channels.insert(*pair.first);
 					pair.first->second->broadcast_msg(nullptr, join_msg + channels[i] + "\n");
-					this->users_DB[ui]->pending_msgs.push_back("353 RPL_NAMREPLY = " + channels[i] + pair.first->second->getUsers() + "\n");
-					this->users_DB[ui]->pending_msgs.push_back("366 RPL_ENDOFNAMES = " + channels[i] + " :End of /NAMES list\n");
+					this->users_DB[ui]->pending_msgs.push_back("353 " + this->users_DB[ui]->nickname + " = " + channels[i] + pair.first->second->getUsers() + "\n");
+					this->users_DB[ui]->pending_msgs.push_back("366 " + this->users_DB[ui]->nickname + " " + channels[i] + " :End of /NAMES list\n");
 				}
 			}
 			else
@@ -281,7 +329,7 @@ void	Server::NOTICEcmd(std::vector<std::string> &pass_cmd, int ui)
 
 void	Server::PRIVMSGcmd(std::vector<std::string> &pass_cmd, int ui)
 {
-	std::string format = ":" + this->users_DB[ui]->nickname + " PRIVMSG ";
+	std::string format = ":" + this->users_DB[ui]->userinfo + " PRIVMSG ";
 	std::string msg;
 	std::vector<std::string> receivers;
 
@@ -291,6 +339,8 @@ void	Server::PRIVMSGcmd(std::vector<std::string> &pass_cmd, int ui)
 	}
 	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
 		receivers.push_back(token);
+	if (pass_cmd.size()== 3)
+		msg = " :";
 	for (size_t i = 2; i < pass_cmd.size(); i++)
 		msg += " " + pass_cmd[i];
 	for (size_t i = 0; i < receivers.size(); i++)
@@ -301,16 +351,21 @@ void	Server::PRIVMSGcmd(std::vector<std::string> &pass_cmd, int ui)
 			this->users_DB[p]->pending_msgs.push_back(format + receivers[i] + msg + "\n");
 		else if (is_channel_prefix(receivers[i][0]) && (it = this->channel_DB.find(receivers[i])) != this->channel_DB.end())
 		{
-			if (it->second->isMode('m') && it->second->UserIsV(this->users_DB[ui]))
-				it->second->broadcast_msg(this->users_DB[ui], format + receivers[i] + msg + "\n");
-			if (it->second->isMode('n'))	{
-				if (it->second->isMember(this->users_DB[ui]))
+			if (it->second->isMode('m'))
+			{
+				if (it->second->UserIsV(this->users_DB[ui]))
 					it->second->broadcast_msg(this->users_DB[ui], format + receivers[i] + msg + "\n");
-				else
-					this->users_DB[ui]->pending_msgs.push_back("404 ERR_CANNOTSENDTOCHAN <" + receivers[i] + "> :Cannot send to channel\n");
 			}
-			else
-				it->second->broadcast_msg(this->users_DB[ui], format + receivers[i] + msg + "\n");
+			else {
+				if (it->second->isMode('n'))	{
+					if (it->second->isMember(this->users_DB[ui]))
+						it->second->broadcast_msg(this->users_DB[ui], format + receivers[i] + msg + "\n");
+					else
+						this->users_DB[ui]->pending_msgs.push_back("404 ERR_CANNOTSENDTOCHAN <" + receivers[i] + "> :Cannot send to channel\n");
+				}
+				else
+					it->second->broadcast_msg(this->users_DB[ui], format + receivers[i] + msg + "\n");
+			}
 		}
 		else
 			this->users_DB[ui]->pending_msgs.push_back("401 ERR_NOSUCHNICK <" + receivers[i] + "> :No such nick/channel\n");
@@ -326,12 +381,7 @@ void	Server::USERcmd(std::vector<std::string> &pass_cmd, int ui)
 		this->users_DB[ui]->username = pass_cmd[1];
 		this->users_DB[ui]->named = true;
 		if (this->users_DB[ui]->nicked && this->users_DB[ui]->named && !this->users_DB[ui]->Registered)
-		{
-			this->users_DB[ui]->Registered = true;
-			std::cout << "New Client has connected from " << this->users_DB[ui]->ip_addr;
-			std::cout << ":" << this->users_DB[ui]->port << " as: " << this->users_DB[ui]->nickname;
-			std::cout << " id: " << ui << std::endl;
-		}
+			welcome_client(ui);
 	}
 }
 
@@ -373,12 +423,7 @@ void	Server::NICKcmd(std::vector<std::string> &pass_cmd, int ui)
 	this->users_DB[ui]->nickname = nickName;
 	this->users_DB[ui]->nicked = true;
 	if (this->users_DB[ui]->nicked && this->users_DB[ui]->named && !this->users_DB[ui]->Registered)
-	{
-		this->users_DB[ui]->Registered = true;
-		std::cout << "New Client has connected from " << this->users_DB[ui]->ip_addr;
-		std::cout << ":" << this->users_DB[ui]->port << " as: " << this->users_DB[ui]->nickname;
-		std::cout << " id: " << ui << std::endl;
-	}
+		welcome_client(ui);
 }
 
 void	Server::deny_newClient(int ui, int n)
@@ -453,6 +498,8 @@ void	Server::cmd_manager(std::string cmd, int rp)
 			this->JOINcmd(cmd_out, rp);
 		if (cmd_out[0] == "MODE")
 			this->MODEcmd(cmd_out, rp);
+		if (cmd_out[0] == "KICK")
+			this->KICKcmd(cmd_out, rp);
 	}
 	else
 	{

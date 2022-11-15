@@ -15,7 +15,6 @@
 
 #include <map>
 #include <set>
-#include "Client.hpp"
 
 class Client;
 class Channel
@@ -52,6 +51,8 @@ public:
 
 	std::string getUsers();
 };
+
+#include "Client.hpp"
 
 bool	Channel::UserIsV(Client* user)
 {
@@ -97,9 +98,11 @@ void	Channel::Bann(std::string user, char op)
 void	Channel::setLimit(char m, std::string limit)
 {
 	if (m == '+')	{
+		this->setModes("+l");
 		this->maxMembers = std::stoi(limit);
 	}
 	else	{
+		this->setModes("-l");
 		this->maxMembers = -1;
 	}
 	
@@ -183,10 +186,7 @@ void	Channel::broadcast_msg(Client* sender, std::string msg)
 {
 	for (std::map<Client*,std::string>::iterator it = Members.begin(); it != Members.end(); it++)	{
 		if (it->first != sender)
-		{
-			std::cout << "sent to: " << it->first->nickname << std::endl;
 			it->first->pending_msgs.push_back(msg);
-		}
 	}
 }
 

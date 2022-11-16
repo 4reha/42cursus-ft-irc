@@ -28,7 +28,9 @@ public:
 	std::string							Topic;
 	std::string 						Password;
 	std::map<Client *, std::string> 	Members;
+	std::set<Client *> 					Invited;
 	std::set<std::string> 				Banned;
+	
 
 	Channel(std::string name, std::string modes);
 	~Channel();
@@ -47,12 +49,20 @@ public:
 	void    setTopic(std::vector<std::string> args);
 	bool	isMode(char mode);
 	bool	UserIsV(Client* user);
+	bool	isinvited(Client* user);
 	
 
 	std::string getUsers();
 };
 
 #include "Client.hpp"
+
+bool	Channel::isinvited(Client* user)
+{
+	if (this->Invited.find(user) == this->Invited.end())
+		return (false);
+	return (true);
+}
 
 bool	Channel::UserIsV(Client* user)
 {
@@ -207,6 +217,7 @@ Channel::Channel(std::string name, std::string modes)
 {
 	this->Name = name;
 	this->maxMembers = -1;
+	this->Modes = "+";
 	this->setModes(modes);
 }
 

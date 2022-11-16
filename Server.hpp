@@ -53,22 +53,79 @@ private:
 	void	MODEcmd(std::vector<std::string> &pass_cmd, int ui);
 	void	TOPICcmd(std::vector<std::string> &pass_cmd, int ui);
 	void	KICKcmd(std::vector<std::string> &pass_cmd, int ui);
+ma	void	INVITEcmd(std::vector<std::string> &pass_cmd, int ui);
+	void	PARTcmd(std::vector<std::string> &pass_cmd, int ui);
 
 	int		search_client(std::string nickname);
 	void	disconnect_client(int ui);
 	void	welcome_client(int ui);
 
 public:
-	Server(char **args);
+	Server();
 	~Server();
-	void init_Server();
-	void start_connection();
+	void	setup_server(char ** args);
+	void 	init_Server();
+	void 	start_connection();
 	Client *new_client(struct sockaddr_in cli_addr, int newsockfd);
 };
 
+void	Server::PARTcmd(std::vector<std::string> &pass_cmd, int ui)
+{
+	std::string msg = " " + this->users_DB[ui]->nickname;
+	std::string format = ":" + this->users_DB[ui]->userinfo + " PART ";
+	std::vector<std::string> channels;
+	if (pass_cmd.size() < 2)	{
+		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS PART :Not enough parameters\n");
+		return ;
+	}
+	else if (pass_cmd.size() > 2)	{
+		msg = pass_cmd[2];
+		for (size_t i = 3; i < pass_cmd.size(); i++)
+			msg += " " + pass_cmd[i];
+	}
+	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
+		channels.push_back(token);
+	std::map<std::string, Channel*>::iterator it;
+	for (size_t i = 0; i < channels.size(); i++)	{
+		if ((it = channel_DB.find(channels[i])) == channel_DB.end())
+			this->users_DB[ui]->pending_msgs.push_back("403 ERR_NOSUCHCHANNEL " + channels[i] + " :No such channel\n");
+		else if (!it->second->isMember(this->users_DB[ui]))
+			this->users_DB[ui]->pending_msgs.push_back("442 ERR_NOTONCHANNEL " + channels[i] + " :You're not on that channel\n");
+		else	{
+			it->second->broadcast_msg(nullptr, format + channels[i] + msg + "\n");
+			it->second->remove_user(this->users_DB[ui]);
+			this->users_DB[ui]->channels.erase(channels[i]);
+		}
+	}
+}
+
+void	Server::INVITEcmd(std::vector<std::string> &pass_cmd, int ui)
+{
+	int	p;
+	std::map<std::string, Channel*>::iterator it;
+
+	if (pass_cmd.size() < 3)
+		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS INVITE :Not enough parameters\n");
+	else if ((p = this->search_client(pass_cmd[1])) < 0)
+		this->users_DB[ui]->pending_msgs.push_back("401 ERR_NOSUCHNICK <" + pass_cmd[1] + "> :No such nick/channel\n");
+	else if ((it = this->channel_DB.find(pass_cmd[2])) != this->channel_DB.end() && !it->second->isMember(this->users_DB[ui]))
+		this->users_DB[ui]->pending_msgs.push_back("442 ERR_NOTONCHANNEL " + pass_cmd[1] + " :You're not on that channel\n");
+	else if (it != this->channel_DB.end() && it->second->isMember(this->users_DB[p]))
+		this->users_DB[ui]->pending_msgs.push_back("443 ERR_USERONCHANNEL " + pass_cmd[1] + " " + pass_cmd[2] +" :is already on channel\n");
+	else if (it != this->channel_DB.end() && it->second->isMode('i') && !it->second->isOperator(this->users_DB[ui]))
+		this->users_DB[ui]->pending_msgs.push_back("482 ERR_CHANOPRIVSNEEDED " + pass_cmd[1] + " :You're not channel operator\n");
+	else if (it == this->channel_DB.end())
+		return ;
+	else {
+		it->second->Invited.insert(this->users_DB[p]);
+		this->users_DB[ui]->pending_msgs.push_back("341 RPL_INVITING " + pass_cmd[1] + " " + pass_cmd[2] + "\n");
+		this->users_DB[p]->pending_msgs.push_back(":" + this->users_DB[ui]->userinfo + " INVITE " + pass_cmd[1] + " " + pass_cmd[2] + "\n");
+	}
+}
+
 void	Server::KICKcmd(std::vector<std::string> &pass_cmd, int ui)
 {
-	std::string msg = " :Unknown reason\n";
+	std::string msg = " " + this->users_DB[ui]->nickname;
 	if (pass_cmd.size() < 3)	{
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS TOPIC :Not enough parameters\n");
 		return ;
@@ -106,7 +163,6 @@ void	Server::KICKcmd(std::vector<std::string> &pass_cmd, int ui)
 			this->users_DB[ui]->pending_msgs.push_back("441 ERR_USERNOTINCHANNEL " + users[j] + " :They aren't on " + channels[i] + "\n");
 		if (channels.size() == 1)
 			i--;
-
 	}
 }
 
@@ -162,6 +218,18 @@ void	Server::MODEcmd(std::vector<std::string> &pass_cmd, int ui)
 		this->users_DB[ui]->pending_msgs.push_back("442 ERR_NOTONCHANNEL " + pass_cmd[1] + " :You're not on that channel\n");
 		return ;
 	}
+	if (pass_cmd.size() == 2)	{
+		std::string params = it->second->Modes;
+		for (size_t i = 0; i < it->second->Modes.length(); i++)
+		{
+			if (it->second->Modes[i] == 'l')
+				params += " " + std::to_string(it->second->maxMembers);
+			if (it->second->Modes[i] == 'k')
+				params += " " + it->second->Password;
+		}	
+		this->users_DB[ui]->pending_msgs.push_back("324 RPL_CHANNELMODEIS " + pass_cmd[1] + " " + params + "\n");
+		return ;
+	}
 	if (!it->second->isOperator(this->users_DB[ui]))	{
 		this->users_DB[ui]->pending_msgs.push_back("482 ERR_CHANOPRIVSNEEDED " + pass_cmd[1] + " :You're not channel operator\n");
 		return ;
@@ -171,6 +239,7 @@ void	Server::MODEcmd(std::vector<std::string> &pass_cmd, int ui)
 			if (!isModeChar(pass_cmd[2][i]))	{
 				this->users_DB[ui]->pending_msgs.push_back("472 ERR_UNKNOWNMODE " + std::string(1, pass_cmd[2][i]) + " :is unknown mode char to me for " + pass_cmd[1] + "\n");
 				pass_cmd[2].erase(pass_cmd[2].begin() + i);
+				continue ;
 			}
 			else if (pass_cmd[2][i] == 'o' || pass_cmd[2][i] == 'v')	{
 				if (p < pass_cmd.size())	{
@@ -213,7 +282,7 @@ void	Server::MODEcmd(std::vector<std::string> &pass_cmd, int ui)
 			else	{
 				it->second->setModes(pass_cmd[2][0] + std::string(1, pass_cmd[2][i]));
 			}
-			it->second->broadcast_msg(nullptr, format + pass_cmd[2][0] + pass_cmd[2][i]);
+			it->second->broadcast_msg(nullptr, format + pass_cmd[2][0] + pass_cmd[2][i] + "\n");
 			std::cout << format + pass_cmd[2][0] + pass_cmd[2][i] << std::endl;
 		}
 	}
@@ -275,7 +344,7 @@ void	Server::JOINcmd(std::vector<std::string> &pass_cmd, int ui)
 		}
 		else
 		{
-			if (pair.first->second->isInvitOnly())
+			if (pair.first->second->isInvitOnly() && !pair.first->second->isinvited(this->users_DB[ui]))
 				this->users_DB[ui]->pending_msgs.push_back("473 ERR_INVITEONLYCHAN " + channels[i] + " :Cannot join channel (+i)\n");
 			else if (pair.first->second->isBanned(this->users_DB[ui]))
 				this->users_DB[ui]->pending_msgs.push_back("474 ERR_BANNEDFROMCHAN " + channels[i] + " :Cannot join channel (+b)\n");
@@ -502,6 +571,10 @@ void	Server::cmd_manager(std::string cmd, int rp)
 			this->MODEcmd(cmd_out, rp);
 		if (cmd_out[0] == "KICK")
 			this->KICKcmd(cmd_out, rp);
+		if (cmd_out[0] == "INVITE")
+			this->INVITEcmd(cmd_out, rp);
+		if (cmd_out[0] == "PART")
+			this->PARTcmd(cmd_out, rp);
 	}
 	else
 	{
@@ -540,7 +613,7 @@ Client*	Server::new_client(struct sockaddr_in cli_addr, int newsockfd)
 	return (new Client(cli_addr, newsockfd));
 }
 
-Server::Server(char **args)
+void	Server::setup_server(char **args)
 {
 	this->port = std::stoi(args[0]);
 	this->password = args[1];
@@ -549,9 +622,16 @@ Server::Server(char **args)
 	this->serv_addr.sin_port = htons(port);
 }
 
+Server::Server()
+{
+}
+
 Server::~Server()
 {
 	std::cout << "Server Shuted down!" << std::endl;
+	for (size_t i = 0; i < this->users_DB.size(); i++)
+		delete this->users_DB[i];
+	this->users_DB.clear();
 	close(this->sockfd);
 }
 

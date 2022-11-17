@@ -1,19 +1,4 @@
 #pragma once
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <iostream>
-#include <poll.h>
-#include <arpa/inet.h>
-
-#include <map>
-#include <vector>
 
 #define MAXCHAN	4
 
@@ -26,16 +11,18 @@ public:
 	int 								port;
 	int 								sockfd;
 	
-	bool 								Registered;
-	bool 								Authenticated;
 	bool 								nicked;
 	bool 								named;
+	bool 								Registered;
+	bool 								Authenticated;
+	time_t 								logtime;
 	std::string 						ip_addr;
 	std::string 						nickname;
 	std::string 						username;
 	std::string                         userinfo;
 	struct pollfd 						sock_pollin;
 	struct pollfd 						sock_pollout;
+	std::set<std::string> 				friends;
 	std::vector<std::string> 			pending_msgs;
 	std::map<std::string, Channel*> 	channels;
 
@@ -62,6 +49,7 @@ void	Client::leaveAllChans()
 
 Client::Client(struct sockaddr_in cli_addr, int newsockfd)
 {
+	this->logtime = time(0);
 	this->ip_addr = inet_ntoa(cli_addr.sin_addr);
 	this->port = ntohs(cli_addr.sin_port);
 	this->sockfd = newsockfd;

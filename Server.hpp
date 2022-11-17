@@ -1,21 +1,18 @@
 #pragma once
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <iostream>
 #include <poll.h>
 #include <arpa/inet.h>
+#include <cmath>
 
 #include <map>
 #include <vector>
 
 #include "Channel.hpp"
+#include "Bot.hpp"
 
 bool	is_channel_prefix(int c);
 bool 	isModeChar(int c);
@@ -31,12 +28,16 @@ class Server
 private:
 	int 								port;
 	int 								sockfd;
+	time_t 								UpTime;
 	std::string 						password;
 	struct pollfd 						poll_sockfd;
 	struct sockaddr_in 					serv_addr;
 	std::vector<Client *> 				users_DB;
 	std::map<std::string, Channel *> 	channel_DB;
 	std::vector<struct pollfd> 			poll_socket;
+
+	Bot									botChat;
+
 
 	void	accept_connection();
 	void	name_later(int p_i);
@@ -53,7 +54,7 @@ private:
 	void	MODEcmd(std::vector<std::string> &pass_cmd, int ui);
 	void	TOPICcmd(std::vector<std::string> &pass_cmd, int ui);
 	void	KICKcmd(std::vector<std::string> &pass_cmd, int ui);
-ma	void	INVITEcmd(std::vector<std::string> &pass_cmd, int ui);
+	void	INVITEcmd(std::vector<std::string> &pass_cmd, int ui);
 	void	PARTcmd(std::vector<std::string> &pass_cmd, int ui);
 
 	int		search_client(std::string nickname);
@@ -61,13 +62,14 @@ ma	void	INVITEcmd(std::vector<std::string> &pass_cmd, int ui);
 	void	welcome_client(int ui);
 
 public:
-	Server();
+	Server(char **args);
 	~Server();
 	void	setup_server(char ** args);
 	void 	init_Server();
 	void 	start_connection();
 	Client *new_client(struct sockaddr_in cli_addr, int newsockfd);
 };
+
 
 void	Server::PARTcmd(std::vector<std::string> &pass_cmd, int ui)
 {
@@ -107,7 +109,7 @@ void	Server::INVITEcmd(std::vector<std::string> &pass_cmd, int ui)
 	if (pass_cmd.size() < 3)
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS INVITE :Not enough parameters\n");
 	else if ((p = this->search_client(pass_cmd[1])) < 0)
-		this->users_DB[ui]->pending_msgs.push_back("401 ERR_NOSUCHNICK <" + pass_cmd[1] + "> :No such nick/channel\n");
+		this->users_DB[ui]->pending_msgs.push_back("401 ERR_NOSUCHNICK " + pass_cmd[1] + " :No such nick/channel\n");
 	else if ((it = this->channel_DB.find(pass_cmd[2])) != this->channel_DB.end() && !it->second->isMember(this->users_DB[ui]))
 		this->users_DB[ui]->pending_msgs.push_back("442 ERR_NOTONCHANNEL " + pass_cmd[1] + " :You're not on that channel\n");
 	else if (it != this->channel_DB.end() && it->second->isMember(this->users_DB[p]))
@@ -175,7 +177,7 @@ void	Server::welcome_client(int ui)
 	std::cout << " id: " << ui << std::endl;
 	this->users_DB[ui]->pending_msgs.push_back("001 " + this->users_DB[ui]->nickname + " :Welcome to the Internet Relay Network " + this->users_DB[ui]->userinfo + "\n");
 	this->users_DB[ui]->pending_msgs.push_back("002 " + this->users_DB[ui]->nickname + " :Your host is e-LEMON-tor, running version 1.12\n");
-	this->users_DB[ui]->pending_msgs.push_back("003 " + this->users_DB[ui]->nickname + " :This server was created 15-11-2002\n");
+	this->users_DB[ui]->pending_msgs.push_back("003 " + this->users_DB[ui]->nickname + " :This server was created " + ctime(&this->UpTime) +"\n");
 	this->users_DB[ui]->pending_msgs.push_back("004 " + this->users_DB[ui]->nickname + " :e-LEMON-ator 1.12 0 *\n");
 
 }
@@ -560,21 +562,24 @@ void	Server::cmd_manager(std::string cmd, int rp)
 		this->disconnect_client(rp);
 	else if (this->users_DB[rp]->Registered)
 	{
-		// std::cout << cpy << std::endl;
 		if (cmd_out[0] == "PRIVMSG")
 			this->PRIVMSGcmd(cmd_out, rp);
-		if (cmd_out[0] == "NOTICE")
+		else if (cmd_out[0] == "NOTICE")
 			this->NOTICEcmd(cmd_out, rp);
-		if (cmd_out[0] == "JOIN")
+		else if (cmd_out[0] == "JOIN")
 			this->JOINcmd(cmd_out, rp);
-		if (cmd_out[0] == "MODE")
+		else if (cmd_out[0] == "MODE")
 			this->MODEcmd(cmd_out, rp);
-		if (cmd_out[0] == "KICK")
+		else if (cmd_out[0] == "KICK")
 			this->KICKcmd(cmd_out, rp);
-		if (cmd_out[0] == "INVITE")
+		else if (cmd_out[0] == "INVITE")
 			this->INVITEcmd(cmd_out, rp);
-		if (cmd_out[0] == "PART")
+		else if (cmd_out[0] == "PART")
 			this->PARTcmd(cmd_out, rp);
+		else if (cmd_out[0] == "BOT")
+			this->botChat.botcmd(this->users_DB, cmd_out, rp);
+		else
+			this->users_DB[rp]->pending_msgs.push_back("421 ERR_UNKNOWNCOMMAND " + cmd_out[0] + " :Unknown command\n");
 	}
 	else
 	{
@@ -613,8 +618,10 @@ Client*	Server::new_client(struct sockaddr_in cli_addr, int newsockfd)
 	return (new Client(cli_addr, newsockfd));
 }
 
-void	Server::setup_server(char **args)
+Server::Server(char **args)
 {
+	std::cout << "IRC Server UP!" << std::endl;
+	this->UpTime = time(0);
 	this->port = std::stoi(args[0]);
 	this->password = args[1];
 	this->serv_addr.sin_family = AF_INET;
@@ -622,16 +629,12 @@ void	Server::setup_server(char **args)
 	this->serv_addr.sin_port = htons(port);
 }
 
-Server::Server()
-{
-}
-
 Server::~Server()
 {
-	std::cout << "Server Shuted down!" << std::endl;
 	for (size_t i = 0; i < this->users_DB.size(); i++)
 		delete this->users_DB[i];
 	this->users_DB.clear();
+	std::cout << "Server Shuted down!" << std::endl;
 	close(this->sockfd);
 }
 

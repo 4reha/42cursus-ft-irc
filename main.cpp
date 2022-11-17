@@ -19,7 +19,7 @@ Server *servObj;
 
 void	Handler(int)
 {
-	servObj->~Server();
+	delete servObj;
 	exit(0);
 }
 
@@ -30,8 +30,7 @@ int main(int ac, char **av)
 	if (!isAllNum(av[1]))
 		error_lol("Error: Port: Not A Number!");
 	signal(SIGINT, Handler);
-	servObj = new Server();
-	servObj->setup_server(&av[1]);
+	servObj = new Server(&av[1]);
 	servObj->init_Server();
 	servObj->start_connection();
 	return (EXIT_SUCCESS);

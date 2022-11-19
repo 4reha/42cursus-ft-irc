@@ -1,5 +1,5 @@
-SRC		= main.cpp utils.cpp #...
-HEADERS	= Server.hpp Client.hpp Channel.hpp Bot.hpp
+SRC		= main.cpp Server.cpp Client.cpp Channel.cpp Bot.cpp Commands.cpp utils.cpp #...
+HEADERS	= Server.hpp Client.hpp Channel.hpp Bot.hpp 
 
 NAME	= ./ircserv
 
@@ -20,6 +20,7 @@ clean:
 	$(RM) $(NAME)
 
 fclean: clean
+	$(RM) History_DB.log
 
 re: fclean all
 

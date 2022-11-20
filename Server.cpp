@@ -78,6 +78,8 @@ void	Server::cmd_manager(std::string cmd, int rp)
 	std::vector<std::string> cmd_out;
 	for (char *token = std::strtok(const_cast<char *>(cmd.c_str()), " "); token != NULL; token = std::strtok(nullptr, " "))
 		cmd_out.push_back(token);
+	if (!cmd_out.size())
+		return ;
 	if (cmd_out[0] == "PASS")
 	{
 		if (this->users_DB[rp]->Registered)
@@ -96,7 +98,7 @@ void	Server::cmd_manager(std::string cmd, int rp)
 		this->USERcmd(cmd_out, rp);
 	}
 	else if (cmd_out[0] == "QUIT")
-		this->disconnect_client(rp);
+		this->QUITcmd(rp);
 	else if (this->users_DB[rp]->Registered)
 	{
 		if (cmd_out[0] == "PRIVMSG")
@@ -131,7 +133,7 @@ void	Server::sockRead(int p_i)
 	std::string cmd;
 	int rp = (p_i - 1) / 2;
 	if (!read_sock(users_DB[rp]->sockfd, cmd))
-		this->disconnect_client(rp);
+		this->QUITcmd(rp);
 	else
 		this->cmd_manager(cmd, rp);
 }
@@ -218,7 +220,7 @@ void    Server::channel_msg(std::map<std::string, Channel*>::iterator it, int ui
         this->users_DB[ui]->pending_msgs.push_back("404 ERR_CANNOTSENDTOCHAN " + it->second->Name + " :Cannot send to channel (+b)\n");
 	else if (it->second->isMode('m'))
 	{
-		if (it->second->UserIsV(this->users_DB[ui]))
+		if (it->second->UserIsV(this->users_DB[ui]) || it->second->isOperator(this->users_DB[ui]))
 			it->second->broadcast_msg(this->users_DB[ui], format + it->second->Name + msg + "\n");
 		else
 			this->users_DB[ui]->pending_msgs.push_back("404 ERR_CANNOTSENDTOCHAN " + it->second->Name + " :Cannot send to channel (+m)\n");

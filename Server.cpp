@@ -98,7 +98,7 @@ void	Server::cmd_manager(std::string cmd, int rp)
 		this->USERcmd(cmd_out, rp);
 	}
 	else if (cmd_out[0] == "QUIT")
-		this->QUITcmd(rp);
+		this->QUITcmd(cmd_out, rp);
 	else if (this->users_DB[rp]->Registered)
 	{
 		if (cmd_out[0] == "PRIVMSG")
@@ -131,9 +131,13 @@ void	Server::cmd_manager(std::string cmd, int rp)
 void	Server::sockRead(int p_i)
 {
 	std::string cmd;
+	std::vector<std::string> cmd_out;
 	int rp = (p_i - 1) / 2;
-	if (!read_sock(users_DB[rp]->sockfd, cmd))
-		this->QUITcmd(rp);
+	if (!read_sock(users_DB[rp]->sockfd, cmd))	{
+		cmd_out.push_back("QUIT");
+		cmd_out.push_back(this->users_DB[rp]->nickname);
+		this->QUITcmd(cmd_out, rp);
+	}
 	else
 		this->cmd_manager(cmd, rp);
 }

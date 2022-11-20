@@ -49,9 +49,16 @@ void 	Client::build()
 	this->userinfo = this->nickname + "!" + this->username + "@" + this->ip_addr;
 }
 
-void	Client::leaveAllChans()
+void	Client::leaveChannel(Channel* channel, std::string msg)
 {
-	while (channels.begin() != channels.end())
-		channels.begin()->second->remove_user(this);
+	channel->broadcast_msg(nullptr, msg);
+	channel->remove_user(this);
+}
+
+void	Client::leaveAllChans(std::string msg)
+{
+	std::string format = ":" + this->userinfo + " PART ";
+	while (this->channels.begin() != this->channels.end())
+		this->leaveChannel(this->channels.begin()->second, format + this->channels.begin()->second->Name + msg);
 	this->channels.clear();
 }

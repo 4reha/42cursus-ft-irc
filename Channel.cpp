@@ -38,10 +38,9 @@ bool	Channel::isMode(char mode)
 
 void	Channel::setTopic(std::vector<std::string> args)
 {
-	std::string topic;
-	topic = args[2];
+	this->Topic = args[2];
 	for (size_t i = 3; i < args.size(); i++)
-		topic += " " + args[i];
+		this->Topic += " " + args[i];
 }
 
 void	Channel::Bann(std::string user, char op)
@@ -78,12 +77,13 @@ bool	Channel::setMemModes(std::string m, std::string user)
 	for (std::map<Client *,std::string>::iterator it = Members.begin(); it != Members.end(); it++)	{
 		if (it->first->nickname == user)	{
 			if (m[0] == '+')	{
-				if (it->second.find(m[1]) != it->second.npos)
+				if (it->second.find(m[1]) == it->second.npos)
 					it->second += m[1];
 			}
 			else	{
+				std::cout << "HERE HERE HERE" << std::endl;
 				size_t p;
-				if ((p = it->second.find(m[1])) == it->second.npos)
+				if ((p = it->second.find(m[1])) != it->second.npos)
 					it->second.erase(it->second.begin() + p);
 			}
 			return (true);
@@ -110,6 +110,15 @@ void Channel::setModes(std::string modes)
 				this->Modes.erase(this->Modes.begin() + p);
 		}
 	}
+}
+
+std::string Channel::getBanned()
+{
+	std::string str = " :";
+	for (std::set<std::string>::iterator it = Banned.begin(); it != Banned.end(); it++)	{
+			str += *it + " ";
+	}
+	return (str);
 }
 
 std::string Channel::getUsers()
@@ -144,14 +153,8 @@ bool	 Channel::isOperator(Client* user)
 
 void Channel::remove_user(Client* user)
 {
-	user->channels.erase(this->Name);
 	this->Members.erase(user);
-	for (std::map<Client*,std::string>::iterator it = Members.begin(); it != Members.end(); it++)	{
-		it->first->pending_msgs.push_back("353 " + it->first->nickname + " = " + this->Name + this->getUsers() + "\n");
-		it->first->pending_msgs.push_back("366 " + it->first->nickname + " " + this->Name + this->getUsers() + "\n");
-	}
-	// user->pending_msgs.push_back("353 " + user->nickname + " = " + channel->Name + channel->getUsers() + "\n");
-	// user->pending_msgs.push_back("366 " + user->nickname + " " + channel->Name + " :End of /NAMES list\n");
+	user->channels.erase(this->Name);
 }
 
 void	Channel::broadcast_msg(Client* sender, std::string msg)
@@ -201,15 +204,17 @@ void	Channel::setupModes(Client* user, std::vector<std::string>& pass_cmd)
 		else if (pass_cmd[2][i] == 'o' || pass_cmd[2][i] == 'v')	{
 			if (p < pass_cmd.size())	{
 				if (!this->setMemModes(pass_cmd[2][0] + std::string(1, pass_cmd[2][i]), pass_cmd[p++]))
-					user->pending_msgs.push_back("441 ERR_USERNOTINCHANNEL "+ pass_cmd[p -1] + " :They aren't on " + pass_cmd[0] + "\n");
+					user->pending_msgs.push_back("441 ERR_USERNOTINCHANNEL "+ pass_cmd[p - 1] + " :They aren't on " + pass_cmd[0] + "\n");
 			}
 			else
 				user->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS MODE :Not enough parameters\n");
 		}
 		else if (pass_cmd[2][i] == 'l')	{
-			if (p < pass_cmd.size() || pass_cmd[2][0] == '-')
+			if (p < pass_cmd.size() && pass_cmd[2][0] == '+')
 				this->setLimit(pass_cmd[2][0], pass_cmd[p++]);
-			else if (pass_cmd[2][0] == '+')
+			else if (pass_cmd[2][0] == '-')
+				this->setLimit(pass_cmd[2][0], "");
+			else
 				user->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS MODE :Not enough parameters\n");
 		}
 		else if (pass_cmd[2][i] == 'k')	{
@@ -235,15 +240,17 @@ void	Channel::setupModes(Client* user, std::vector<std::string>& pass_cmd)
 		else if (pass_cmd[2][i] == 'b')	{
 			if (p < pass_cmd.size())
 				this->Bann(pass_cmd[p++], pass_cmd[2][0]);
-			else
-				user->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS MODE :Not enough parameters\n");
+			else	{
+				user->pending_msgs.push_back("367 RPL_BANLIST " + this->Name + this->getBanned() + "\n");
+				user->pending_msgs.push_back("368 RPL_ENDOFBANLIST " + this->Name + " :End of channel ban list\n");
+			}
 		}
 		else	{
 			this->setModes(pass_cmd[2][0] + std::string(1, pass_cmd[2][i]));
 		}
 		if (p > 3)
 			this->broadcast_msg(nullptr, format + pass_cmd[2][0] + pass_cmd[2][i] + " " + pass_cmd[p - 1] + "\n");
-		else
+		else if (pass_cmd[2][i] != 'l' && pass_cmd[2][i] != 'k' && pass_cmd[2][i] != 'v' && pass_cmd[2][i] != 'o')
 			this->broadcast_msg(nullptr, format + pass_cmd[2][0] + pass_cmd[2][i] + "\n");
 	}
 }

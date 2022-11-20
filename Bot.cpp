@@ -182,6 +182,7 @@ void	Bot::HELPcmd(int ui)
 	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :location {user}(optinal) -- Display Location\n");
 	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :addfriend {user} -- Add Friend To Friends List\n");
 	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :rmfriend {user} -- Remove Friend From Friends List\n");
-	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :status -- Display Frinds Status Online/Offline\n");
+	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :status -- Display Friends Status Online/Offline\n");
+	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :help -- Display Available Commands\n");
 
 }

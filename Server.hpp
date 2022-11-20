@@ -62,7 +62,7 @@ class Server
 		void		INVITEcmd			(std::vector<std::string> &pass_cmd, int ui);
 		void		PARTcmd				(std::vector<std::string> &pass_cmd, int ui);
 
-		void		disconnect_client	(int ui);
+		void		QUITcmd	(int ui);
 		void		welcome_client		(int ui);
 		Client*		new_client			(struct sockaddr_in cli_addr, int newsockfd);
 

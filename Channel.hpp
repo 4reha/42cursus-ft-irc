@@ -44,4 +44,5 @@ class Channel
 		
 		std::string	getMode();
 		std::string getUsers();
+		std::string	getBanned();
 };

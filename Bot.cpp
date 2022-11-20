@@ -12,22 +12,22 @@ void	Bot::botcmd(std::vector<Client *>& clients, std::vector<std::string>& cmds,
 {
 	this->users = clients;
 	if (cmds.size() >= 2)   {
-		if (cmds[1] == "LOGTIME") {
+		if (cmds[1] == ":logtime") {
 			this->LOGTIMEcmd(cmds, ui);
 		}
-		else if (cmds[1] == "LOCATION") {
+		else if (cmds[1] == ":location") {
 			this->LOCATIONcmd(cmds, ui);
 		}
-		else if (cmds[1] == "ADDFRIEND") {
+		else if (cmds[1] == ":addfriend") {
 			this->ADDFRIENDcmd(cmds, ui);
 		}
-		else if (cmds[1] == "RMFRIEND") {
+		else if (cmds[1] == ":rmfriend") {
 			this->RMFRIENDcmd(cmds, ui);
 		}
-		else if (cmds[1] == "STATUS") {
+		else if (cmds[1] == ":status") {
 			this->STATUScmd(ui);
 		}
-		else if (cmds[1] == "HELP") {
+		else if (cmds[1] == ":help") {
 			this->HELPcmd(ui);
 		}
 	}
@@ -178,10 +178,10 @@ void	Bot::HELPcmd(int ui)
 
 	this->users[ui]->pending_msgs.push_back(":BOT NOTICE IRC :Hello, I Am BOT.. And This What I Can Do:\n");
 	this->users[ui]->pending_msgs.push_back("NOTICE IRC :BOT <cmd> {param}:\n");
-	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> LOGTIME {user}(optinal) -- Display Logtime\n");
-	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> LOCATION {user}(optinal) -- Display Location\n");
-	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> ADDFRIEND {user} -- Add Friend To Friends List\n");
-	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> RMFRIEND {user} -- Remove Friend From Friends List\n");
-	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> STATUS -- Display Frinds Status Online/Offline\n");
+	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :logtime {user}(optinal) -- Display Logtime\n");
+	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :location {user}(optinal) -- Display Location\n");
+	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :addfriend {user} -- Add Friend To Friends List\n");
+	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :rmfriend {user} -- Remove Friend From Friends List\n");
+	this->users[ui]->pending_msgs.push_back("NOTICE IRC :   *> :status -- Display Frinds Status Online/Offline\n");
 
 }

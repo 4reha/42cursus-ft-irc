@@ -44,8 +44,9 @@ class Client
 		Client						(Client const &cpy);
 		Client						(struct sockaddr_in cli_addr, int newsockfd);
 
-		void	leaveAllChans		();
 		void    build				();
+		void	leaveAllChans		(std::string msg);
+		void	leaveChannel		(Channel* channel, std::string msg);
 		bool    join_channel		(Channel* channel, std::string mode);
 };
 

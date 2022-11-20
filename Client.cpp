@@ -51,7 +51,7 @@ void 	Client::build()
 
 void	Client::leaveAllChans()
 {
-	for (std::map<std::string, Channel*>::iterator it = channels.begin(); it != channels.end(); it++)
-		it->second->Members.erase(this);
+	while (channels.begin() != channels.end())
+		channels.begin()->second->remove_user(this);
 	this->channels.clear();
 }

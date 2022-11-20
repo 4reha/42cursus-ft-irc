@@ -115,7 +115,7 @@ void	Server::JOINcmd(std::vector<std::string> &pass_cmd, int ui)
 		return;
 	}
 	if (pass_cmd.size() == 2 && pass_cmd[1] == "0")	{
-		this->users_DB[ui]->leaveAllChans();
+		this->users_DB[ui]->leaveAllChans(this->users_DB[ui]->nickname);
 		return ;
 	}
 	channels = ft_csplit(pass_cmd[1], ",");
@@ -168,8 +168,8 @@ void	Server::KICKcmd(std::vector<std::string> &pass_cmd, int ui)
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS TOPIC :Not enough parameters\n");
 		return ;
 	}
-	if (pass_cmd.size() >= 4)
-		msg = " " + pass_cmd[3] + " " + str_join(pass_cmd, 4);
+	if (pass_cmd.size() > 3 && !(pass_cmd.size() == 4 && pass_cmd[3] == ":"))
+		msg = " " + str_join(pass_cmd, 3);
 	std::map<std::string, Channel*>::iterator it;
 	std::string format = ":" + this->users_DB[ui]->userinfo + " KICK ";
 	std::vector<std::string>	channels, users;
@@ -185,7 +185,7 @@ void	Server::KICKcmd(std::vector<std::string> &pass_cmd, int ui)
 			this->users_DB[ui]->pending_msgs.push_back("482 ERR_CHANOPRIVSNEEDED " + channels[i] + " :You're not channel operator\n");
 		else if (l >= 0)	{
 			if (it->second->isMember(this->users_DB[l]))	{
-				it->second->broadcast_msg(nullptr, format + " " + channels[i] + " " + users[j] + msg + "\n");
+				it->second->broadcast_msg(nullptr, format + channels[i] + " " + users[j] + msg + "\n");
 				it->second->remove_user(this->users_DB[l]);
 			}
 			else
@@ -224,7 +224,7 @@ void	Server::INVITEcmd(std::vector<std::string> &pass_cmd, int ui)
 
 void	Server::PARTcmd(std::vector<std::string> &pass_cmd, int ui)
 {
-	std::string msg = " " + this->users_DB[ui]->nickname;
+	std::string msg = " " + this->users_DB[ui]->nickname + "\n";
 	std::string format = ":" + this->users_DB[ui]->userinfo + " PART ";
 	std::vector<std::string> channels;
 	if (pass_cmd.size() < 2)	{
@@ -232,7 +232,7 @@ void	Server::PARTcmd(std::vector<std::string> &pass_cmd, int ui)
 		return ;
 	}
 	else if (pass_cmd.size() > 2)
-		msg = " " + pass_cmd[2] + " " + str_join(pass_cmd, 3);
+		msg = " " + str_join(pass_cmd, 2) + "\n";
 	channels = ft_csplit(pass_cmd[1], ",");
 	std::map<std::string, Channel*>::iterator it;
 	for (size_t i = 0; i < channels.size(); i++)	{
@@ -240,10 +240,8 @@ void	Server::PARTcmd(std::vector<std::string> &pass_cmd, int ui)
 			this->users_DB[ui]->pending_msgs.push_back("403 ERR_NOSUCHCHANNEL " + channels[i] + " :No such channel\n");
 		else if (!it->second->isMember(this->users_DB[ui]))
 			this->users_DB[ui]->pending_msgs.push_back("442 ERR_NOTONCHANNEL " + channels[i] + " :You're not on that channel\n");
-		else	{
-			it->second->broadcast_msg(nullptr, format + channels[i] + msg + "\n");
-			it->second->remove_user(this->users_DB[ui]);
-		}
+		else
+			this->users_DB[ui]->leaveChannel(it->second, format + channels[i] + msg);
 	}
 }
 
@@ -268,9 +266,10 @@ void	Server::TOPICcmd(std::vector<std::string> &pass_cmd, int ui)
 		this->users_DB[ui]->pending_msgs.push_back("332 RPL_TOPIC " + pass_cmd[1] + " " + it->second->Topic + "\n");
 }
 
-void	Server::QUITcmd(int ui)
+void	Server::QUITcmd(std::vector<std::string> &pass_cmd, int ui)
 {
-	this->users_DB[ui]->leaveAllChans();
+	std::string msg =  " " + str_join(pass_cmd, 1) + "\n";
+	this->users_DB[ui]->leaveAllChans(msg);
 	delete users_DB[ui];
 	this->users_DB.erase(users_DB.begin() + ui);
 	this->poll_socket.erase(poll_socket.begin() + (ui * 2 +1));

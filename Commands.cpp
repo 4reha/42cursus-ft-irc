@@ -93,7 +93,7 @@ void	Server::NOTICEcmd(std::vector<std::string> &pass_cmd, int ui)
 	receivers = ft_csplit(pass_cmd[1], ",");
 	if (pass_cmd.size() == 3)
 		msg = " :";
-	msg += str_join(pass_cmd, 2);
+	msg += " " + str_join(pass_cmd, 2);
 	for (size_t i = 0; i < receivers.size(); i++)
 	{
 		int p;
@@ -150,7 +150,7 @@ void	Server::MODEcmd(std::vector<std::string> &pass_cmd, int ui)
 	if (pass_cmd.size() < 2)
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS MODE :Not enough parameters\n");
 	else if ((it = channel_DB.find(pass_cmd[1])) == channel_DB.end())
-		this->users_DB[ui]->pending_msgs.push_back("403 ERR_NOSUCHCHANNEL " + pass_cmd[1] + " :Not enough parameters\n");
+		this->users_DB[ui]->pending_msgs.push_back("403 ERR_NOSUCHCHANNEL " + pass_cmd[1] + " :No such channel\n");
 	else if (!it->second->isMember(this->users_DB[ui]))
 		this->users_DB[ui]->pending_msgs.push_back("442 ERR_NOTONCHANNEL " + pass_cmd[1] + " :You're not on that channel\n");
 	else if (pass_cmd.size() == 2)
@@ -231,13 +231,9 @@ void	Server::PARTcmd(std::vector<std::string> &pass_cmd, int ui)
 		this->users_DB[ui]->pending_msgs.push_back("461 ERR_NEEDMOREPARAMS PART :Not enough parameters\n");
 		return ;
 	}
-	else if (pass_cmd.size() > 2)	{
-		msg = " " + pass_cmd[2];
-		for (size_t i = 3; i < pass_cmd.size(); i++)
-			msg += " " + pass_cmd[i];
-	}
-	for (char *token = std::strtok(const_cast<char *>(pass_cmd[1].c_str()), ","); token != NULL; token = std::strtok(nullptr, ","))
-		channels.push_back(token);
+	else if (pass_cmd.size() > 2)
+		msg = " " + pass_cmd[2] + " " + str_join(pass_cmd, 3);
+	channels = ft_csplit(pass_cmd[1], ",");
 	std::map<std::string, Channel*>::iterator it;
 	for (size_t i = 0; i < channels.size(); i++)	{
 		if ((it = channel_DB.find(channels[i])) == channel_DB.end())
@@ -264,18 +260,17 @@ void	Server::TOPICcmd(std::vector<std::string> &pass_cmd, int ui)
 		this->users_DB[ui]->pending_msgs.push_back("482 ERR_CHANOPRIVSNEEDED " + pass_cmd[1] + " :You're not channel operator\n");
 	else if (!it->second->isMode('t'))
 		this->users_DB[ui]->pending_msgs.push_back("477 ERR_NOCHANMODES " + pass_cmd[1] + ":Channel doesn't support (t) mode\n");
-	else if (pass_cmd.size() >= 2)
+	else if (pass_cmd.size() > 2)
 		it->second->setTopic(pass_cmd);
 	else if (it->second->Topic == "")
 		this->users_DB[ui]->pending_msgs.push_back("331 RPL_NOTOPIC " + pass_cmd[1] + " :No topic is set\n");
 	else
-		this->users_DB[ui]->pending_msgs.push_back("332 RPL_TOPIC " + pass_cmd[1] + it->second->Topic+"\n");
+		this->users_DB[ui]->pending_msgs.push_back("332 RPL_TOPIC " + pass_cmd[1] + " " + it->second->Topic + "\n");
 }
 
-void	Server::disconnect_client(int ui)
+void	Server::QUITcmd(int ui)
 {
-	for (std::map<std::string, Channel*>::iterator it = this->users_DB[ui]->channels.begin(); it != this->users_DB[ui]->channels.end(); it++)
-		it->second->remove_user(this->users_DB[ui]);
+	this->users_DB[ui]->leaveAllChans();
 	delete users_DB[ui];
 	this->users_DB.erase(users_DB.begin() + ui);
 	this->poll_socket.erase(poll_socket.begin() + (ui * 2 +1));

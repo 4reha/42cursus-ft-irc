@@ -29,6 +29,7 @@ std::vector<std::string> 	ft_csplit(const std::string& str, std::string c);
 class Server
 {
 	private:
+		int 								opt;
 		int 								port;
 		int 								sockfd;
 		time_t 								UpTime;

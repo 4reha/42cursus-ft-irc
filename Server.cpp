@@ -8,6 +8,7 @@ Server::Server(char **args)
 	this->serv_addr.sin_family = AF_INET;
 	this->serv_addr.sin_addr.s_addr = INADDR_ANY;
 	this->serv_addr.sin_port = htons(port);
+	this->opt = 1;
 	this->history.open("History_DB.log", std::ios::in | std::ios::out | std::ios::app);
 	this->history << "--------------------------------------------------------------------------------" << std::endl;
 	this->history << "--------------------------------------------------------------------------------" << std::endl;
@@ -162,6 +163,8 @@ void	Server::init_Server()
 {
 	if ((this->sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 		error_lol("Error: Socket failure\n");
+	if (setsockopt(this->sockfd, SOL_SOCKET, SO_REUSEADDR, &this->opt, sizeof(this->opt) ) < 0)
+		error_lol("Error: Socket Option failure\n");
 	if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
 		error_lol("Error: Bind failure");
 	if (listen(sockfd, 5) < 0)
